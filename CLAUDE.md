@@ -118,6 +118,18 @@ Event Trigger → [Physical Error? → Deterministic Script | Complex Anomaly? �
 - Implement cross-review between peer agents (e.g., CPU expert vs Lock expert)
 - Constrain exploration paths within pre-defined anomaly diagnosis trees
 
+## Manual Testing Requirements
+
+Every phase and sub-task **must** include a `## Manual Testing` section in the corresponding code or documentation that records:
+
+1. **Prerequisites** - What needs to be running or configured (e.g., PostgreSQL instance, env vars, Docker containers)
+2. **Step-by-step test commands** - Copy-pasteable shell commands the developer can run to verify correctness
+3. **Expected results** - Exact output, return values, or behaviors that confirm the task is working correctly
+4. **Negative tests** - Commands that should fail or be blocked, with the expected error message/behavior
+5. **Cleanup** - How to tear down any test resources
+
+This ensures every piece of functionality can be independently verified by a human before moving to the next task. Do not mark a task as complete without providing these manual test instructions.
+
 ## Critical Safety Rules
 
 1. **Never bypass physical deterministic repair** - For storage-layer errors, use verified scripts only
