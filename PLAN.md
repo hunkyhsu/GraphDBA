@@ -103,60 +103,9 @@ GraphDBA is an industrial-grade database self-healing and tuning system that use
 
 ---
 
-## Python Dependencies (requirements.txt)
-
-```txt
-# Core Agent Framework
-langgraph>=0.2.0
-langchain>=0.1.0
-langchain-community>=0.0.20
-langchain-openai>=0.0.5
-langchain-anthropic>=0.1.0
-
-# MCP Protocol
-mcp>=1.0.0
-
-# Database & Vector Search
-psycopg2-binary>=2.9.9
-sqlalchemy>=2.0.25
-pgvector  # Note: Requires PostgreSQL extension installed separately
-
-# LLM Providers
-openai>=1.12.0
-anthropic>=0.18.0
-dashscope>=1.14.0  # Qwen-Max
-litellm>=1.30.0    # Multi-provider abstraction
-
-# RAG & Document Processing
-chromadb>=0.4.22
-pypdf>=4.0.0
-python-docx>=1.1.0
-unstructured>=0.12.0
-sentence-transformers>=2.3.0
-
-# API & Web Framework
-fastapi>=0.110.0
-uvicorn[standard]>=0.27.0
-pydantic>=2.6.0
-pydantic-settings>=2.1.0
-
-# Security & Authentication
-python-jose[cryptography]>=3.3.0
-cryptography>=42.0.0
-python-dotenv>=1.0.0
-
-# Utilities
-pyyaml>=6.0.1
-requests>=2.31.0
-tenacity>=8.2.3  # Retry logic
-prometheus-client>=0.19.0  # Metrics export
-```
-
----
-
 ## Implementation Phases
 
-### [ ] Phase 1: Project Foundation & Read-Only MCP (Week 1-2)
+### [ Finished ] Phase 1: Project Foundation & Read-Only MCP (Week 1-2)
 
 **Goal:** Establish project structure, security utilities, and safe read-only database access.
 
@@ -200,17 +149,24 @@ prometheus-client>=0.19.0  # Metrics export
 
 **Tasks:**
 
-1. **PostgreSQL Vector Store Setup (`rag/pgvector_store.py`)**
+1. **[Done] PostgreSQL Vector Store Setup (`rag/pgvector_store.py`)**
   - Enable `pgvector` extension
   - Create knowledge_chunks table with vector embeddings
   - Implement hybrid retrieval (semantic + lexical with RRF)
-2. **Metric-to-Text Converter (`rag/metric_to_text.py`)**
+2. **[Done] Metric-to-Text Converter (`rag/metric_to_text.py`)**
   - Convert time-series data to semantic descriptions
   - Statistical analysis for spike/drop detection
-3. **Document Loader (`rag/document_loader.py`)**
-  - Parse PostgreSQL documentation (PDF/HTML)
-  - Extract error code mappings
-  - Generate embeddings and store in pgvector
+  - Z-score based anomaly detection (spikes/drops)
+  - Linear regression for trend analysis
+  - Complete test suite with 13 passing tests
+3. **[Done] Document Loader (`rag/document_loader.py`)**
+  - Parse PostgreSQL documentation (PDF/HTML/Text)
+  - Extract error code mappings with regex pattern matching
+  - Generate embeddings using sentence-transformers (all-MiniLM-L6-v2)
+  - Store in pgvector using existing PGVectorStore
+  - Support for load_pdf(), load_text(), extract_error_codes(), load_error_codes()
+  - Complete test suite with 13 tests
+  - Comprehensive manual testing guide (tests/MANUAL_TEST_DOCUMENT_LOADER.md)
 4. **Feedback Store Integration**
   - Capture DBA refinements as high-confidence knowledge entries
 
@@ -384,4 +340,3 @@ prometheus-client>=0.19.0  # Metrics export
 - System handles 10+ concurrent workflows
 
 ---
-

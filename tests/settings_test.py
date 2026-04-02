@@ -18,6 +18,7 @@ from config.settings import (
     LLMSettings,
     QuerySafetySettings,
     Settings,
+    VectorDatabaseSettings,
     WriteDatabaseSettings,
 )
 
@@ -90,6 +91,15 @@ class TestWriteDatabaseSettings:
         r = DatabaseSettings()
         w = WriteDatabaseSettings()
         assert r.host != w.host
+
+
+class TestVectorDatabaseSettings:
+    """Verify vector-database config helpers."""
+
+    def test_connection_params_dict(self) -> None:
+        s = VectorDatabaseSettings()
+        params = s.connection_params
+        assert set(params.keys()) == {"host", "port", "database", "user", "password"}
 
 
 # -- LLMSettings -----------------------------------------------------------

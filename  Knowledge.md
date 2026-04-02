@@ -12,3 +12,4 @@ A Standard data access security layer is composed of 7 modules:
 - Resource Circuit Breakers: Add query timeout enforcement + Implement row limit injector
 - Egress/Exfiltration Control: Create DLP validator for sensitive data patterns
 - Audit Logging: 
+

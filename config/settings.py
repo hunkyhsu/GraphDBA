@@ -81,6 +81,17 @@ class VectorDatabaseSettings(BaseSettings):
         """Generate PostgreSQL connection string."""
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
 
+    @property
+    def connection_params(self) -> dict:
+        """Get connection parameters as dict."""
+        return {
+            'host': self.host,
+            'port': self.port,
+            'database': self.name,
+            'user': self.user,
+            'password': self.password
+        }
+
 
 class LLMSettings(BaseSettings):
     """LLM provider settings."""

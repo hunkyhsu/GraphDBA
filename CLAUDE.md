@@ -92,6 +92,24 @@ Event Trigger → [Physical Error? → Deterministic Script | Complex Anomaly? �
 - If key business metrics degrade unexpectedly, system auto-rolls back without human intervention
 - Uses `ROLLBACK TO SAVEPOINT` or snapshot restoration
 
+## Python Environment Rules
+
+**MANDATORY**: All Python commands in this project must be run via Poetry:
+
+```bash
+poetry run python <script.py>
+poetry run pytest
+poetry run uvicorn ...
+```
+
+**FORBIDDEN**:
+- `source venv/bin/activate` or `source .venv/bin/activate`
+- `conda activate` or any conda environment activation
+- Direct `python` / `python3` calls outside of `poetry run`
+- Installing packages with `pip install` directly
+
+Use `poetry add <package>` to add dependencies and `poetry install` to set up the environment.
+
 ## Development Guidelines
 
 ### When Working with Agent Code
