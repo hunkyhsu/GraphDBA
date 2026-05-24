@@ -1,0 +1,103 @@
+case_name: "PostgreSQL Transaction Deadlock (read/write split test)"
+
+# Field keys use Pydantic aliases so AlertPayload.model_validate() works directly.
+alert_payload:
+  fingerprint: "alert_deadlock_001"
+  alertname: "PostgreSQL Deadlock Detected"
+  instance: "127.0.0.1:5432"
+  severity: "high"
+  status: "firing"
+  summary: "Database deadlock detected between two concurrent transactions"
+  description: >
+    Postgres log: ERROR: deadlock detected.
+    Process 1234 waits for ShareLock on transaction 567;
+    blocked by process 5678.
+    Process 5678 waits for ShareLock on transaction 123;
+    blocked by process 1234.
+  startsAt: "2026-05-11T10:00:00Z"
+  raw_payload: {}
+
+# Human-readable descriptions injected into list_tools() responses so the LLM
+# can reason about which tool to call during diagnosis.
+tool_descriptions:
+  get_blocking_locks: >
+    Returns current blocking lock pairs from pg_locks joined with
+    pg_stat_activity. Fields: blocked_pid, blocked_user, blocking_pid,
+    blocking_user, blocked_statement, blocking_statement.
+  execute_safe_select: >
+    Executes a read-only SELECT query with row-count safety limits.
+    Returns {"results": [...]} or {"error": "..."}.
+  get_pg_stat_statements: >
+    Returns slow query statistics from pg_stat_statements ordered by
+    mean execution time. Accepts min_duration_ms and limit filters.
+  explain_query: >
+    Runs EXPLAIN [ANALYZE] on a given SELECT query and returns the
+    execution plan. Accepts query and run_analyze (bool).
+  execute_safe_write: >
+    Executes a pre-approved write SQL statement inside a safe transaction.
+    Used by the execution node to apply remediation steps.
+  propose_tuning_action: >
+    Stages a tuning action ticket for DBA approval without executing it.
+  execute_approval_action: >
+    Executes a previously approved change ticket by ticket_id.
+
+# Mock responses keyed by MCP tool name.
+# Read tools are served to the read MCP client; write tools to the write client.
+mock_responses:
+  # ── read tools ──────────────────────────────────────────────────────────────
+  get_blocking_locks:
+    data: >
+      {"blocking_locks": [
+        {
+          "blocked_pid": 1234,
+          "blocked_user": "app_user",
+          "blocking_pid": 5678,
+          "blocking_user": "app_user",
+          "blocked_statement": "UPDATE accounts SET balance = 100 WHERE id = 1;",
+          "blocking_statement": "UPDATE accounts SET balance = 200 WHERE id = 2;"
+        },
+        {
+          "blocked_pid": 5678,
+          "blocked_user": "app_user",
+          "blocking_pid": 1234,
+          "blocking_user": "app_user",
+          "blocked_statement": "UPDATE accounts SET balance = 200 WHERE id = 2;",
+          "blocking_statement": "UPDATE accounts SET balance = 100 WHERE id = 1;"
+        }
+      ]}
+
+  execute_safe_select:
+    data: >
+      {"results": [
+        {"pid": 1234, "state": "idle in transaction", "wait_event_type": "Lock",
+         "wait_event": "transactionid", "query": "UPDATE accounts SET balance = 100 WHERE id = 1;"},
+        {"pid": 5678, "state": "idle in transaction", "wait_event_type": "Lock",
+         "wait_event": "transactionid", "query": "UPDATE accounts SET balance = 200 WHERE id = 2;"}
+      ]}
+
+  get_pg_stat_statements:
+    data: >
+      {"slow_queries": [
+        {"query": "UPDATE accounts SET balance = $1 WHERE id = $2",
+         "calls": 1523, "total_exec_time": 45230.5,
+         "mean_exec_time": 29.7, "rows": 1523}
+      ]}
+
+  explain_query:
+    data: >
+      {"execution_plan": [
+        {"QUERY PLAN": "Seq Scan on accounts (cost=0.00..35.50 rows=1550 width=40)"}
+      ], "analyzed": false}
+
+  # ── write tools ─────────────────────────────────────────────────────────────
+  execute_safe_write:
+    data: "SUCCESS: statement executed and committed."
+
+  propose_tuning_action:
+    data: >
+      {"status": "STAGED", "ticket_id": "mock-ticket-001",
+       "message": "Action paused. Awaiting human DBA approval via the dashboard."}
+
+  execute_approval_action:
+    data: >
+      {"status": "SUCCESS", "message": "Action executed and committed safely."}

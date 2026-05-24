@@ -1,0 +1,16 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'instance']
+  group_wait: 5s         # 收到第一条告警后等待 5 秒，看有没有同组告警一起打包
+  group_interval: 10s    # 前后两组告警发送的间隔时间
+  repeat_interval: 1h    # 重复发送相同告警的间隔
+  receiver: 'fastapi-webhook'
+
+receivers:
+  - name: 'fastapi-webhook'
+    webhook_configs:
+      # host.docker.internal 映射到你的 MacBook 宿主机，端口匹配你的 FastAPI 端口
+      - url: 'http://host.docker.internal:8000/api/v1/alerts'
+        send_resolved: true  # 告警恢复时也发送 Webhook 通知

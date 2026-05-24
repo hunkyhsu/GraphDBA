@@ -1,0 +1,11 @@
+[mcp_servers.chrome-devtools]
+args = ["chrome-devtools-mcp@latest"]
+command = "npx"
+
+[mcp_servers.github]
+args = ["github-mcp@latest"]
+command = "npx"
+
+[mcp_servers.postgres]
+args = ["postgres-mcp@latest"]
+command = "npx"

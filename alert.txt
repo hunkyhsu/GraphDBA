@@ -1,0 +1,57 @@
+{
+  "version": "4",
+  "groupKey": "{}:{alertname=\"PostgreSQLRowLockContention\", instance=\"postgres-exporter:9187\"}",
+  "status": "firing",
+  "receiver": "fastapi-webhook",
+  "groupLabels": {
+    "alertname": "PostgreSQLRowLockContention",
+    "instance": "postgres-exporter:9187"
+  },
+  "commonLabels": {
+    "alertname": "PostgreSQLRowLockContention",
+    "application_name": "psql",
+    "backend_type": "client backend",
+    "datname": "test_db",
+    "instance": "postgres-exporter:9187",
+    "job": "postgres-cluster",
+    "server": "host.docker.internal:5432",
+    "severity": "high",
+    "state": "active",
+    "usename": "hunkyhsu",
+    "wait_event": "transactionid",
+    "wait_event_type": "Lock"
+  },
+  "commonAnnotations": {
+    "description": "Instance postgres-exporter:9187 in database test_db has active lock blocking. Queries are waiting indefinitely.",
+    "summary": "Database row-level lock contention detected"
+  },
+  "externalURL": "http://7c8805b0862b:9093",
+  "truncatedAlerts": 0,
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "PostgreSQLRowLockContention",
+        "application_name": "psql",
+        "backend_type": "client backend",
+        "datname": "test_db",
+        "instance": "postgres-exporter:9187",
+        "job": "postgres-cluster",
+        "server": "host.docker.internal:5432",
+        "severity": "high",
+        "state": "active",
+        "usename": "hunkyhsu",
+        "wait_event": "transactionid",
+        "wait_event_type": "Lock"
+      },
+      "annotations": {
+        "description": "Instance postgres-exporter:9187 in database test_db has active lock blocking. Queries are waiting indefinitely.",
+        "summary": "Database row-level lock contention detected"
+      },
+      "startsAt": "2026-05-18T13:55:01.35Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://df707016ca0c:9090/graph?g0.expr=pg_stat_activity_count%7Bwait_event_type%3D%22Lock%22%7D+%3E+0&g0.tab=1",
+      "fingerprint": "957fac5bf2462993"
+    }
+  ]
+}

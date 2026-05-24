@@ -2,175 +2,115 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Strict Constraints
 
-GraphDBA is an industrial-grade Agentic database self-healing and tuning system. The core design philosophy centers on building a strict deterministic defensive state machine that uses precise event triggers as the sole entry point for AI agent intervention.
+- **Do not execute tests or run local scripts.** Provide implementation plans and code modifications only.
+- **Do not** read or reference files in `demo/`, `rag/`, or `utils/`. Ignore all `README.md` files — their content is outdated. Focus exclusively on the Agent Graph (`src/graphdba/agents/`) and Mock Testing (`tests/`).
 
-**Key Principles:**
-- Safety-first, deterministic-priority design
-- Physical layer errors use deterministic repair scripts (no AI trial-and-error)
-- Complex performance anomalies use multi-agent cross-validation workflows
-- Mandatory DBA one-click review with absolute version rollback capability
-- AI agents are orchestration engines, not exploratory experimenters
+## Commands
 
-## System Architecture
-
-### Five-Layer Architecture (Bottom-Up)
-
-1. **Physical & Storage Layer**
-   - Database kernels (PostgreSQL/MySQL)
-   - WAL (Write-Ahead Logging), Undo Log
-   - Volume-based snapshot mechanisms
-
-2. **Security & Protocol Layer (MCP Gateway)**
-   - Dual-stack MCP Servers (read/write isolation)
-   - Read Probe MCP: READ-ONLY, row limiting, timeout circuit breaker
-   - Write Execution MCP: OAuth identity passthrough, forced snapshot anchoring
-   - Prevents malicious prompt injection from reaching physical database
-
-3. **Agentic Reasoning Layer**
-   - **Orchestrator/RCA Agent**: Entity extraction, workflow control
-   - **Diagnostic Agent**: Metrics and log analysis
-   - **Planning Agent**: Generate mitigation measures and tuning scripts
-   - **Validation Agent (Critic)**: Dynamic verification using real-time physical data to eliminate hallucinations
-
-4. **Knowledge & RAG Layer**
-   - Metric-to-Text converter (transforms time-series metrics into semantic descriptions)
-   - Hybrid retrieval: BM25 (lexical) + semantic vector search with RRF reranking
-   - Feedback Store: Captures DBA refinements for continuous learning
-
-5. **Application & Auditing Layer**
-   - DBA review dashboard with Human-in-the-loop (HITL)
-   - Snapshot/version rollback control panel
-   - One-click deployment/execution switch
-
-### Core Workflow
-
-```
-Event Trigger → [Physical Error? → Deterministic Script | Complex Anomaly? → Multi-Agent Diagnosis]
-→ DBA Review → Snapshot Anchor → Execute → Health Check → [Success | Auto-Rollback]
-```
-
-## Technology Stack
-
-| Component | Technology | Rationale |
-|-----------|-----------|-----------|
-| Agent Framework | DB-GPT (AWEL) | Native multi-agent framework for databases with sandbox execution |
-| MCP Gateway | Bytebase DBHub | Lightweight multi-database MCP with built-in guardrails |
-| LLM Engine | Qwen-Max / GPT-4o | Strong code reasoning and logical pruning capabilities |
-| RAG & Knowledge | RAGFlow + ChromaDB | Deep document understanding, dual-path retrieval |
-| Version Rollback | Undo Log + Volume Snapshot | DML rollback via Undo Log, DDL safety via storage snapshots |
-
-## Key Design Patterns
-
-### 1. Physical Deterministic Short-Circuit
-- Page corruption, disk bad blocks, or Fatal-level crashes bypass AI reasoning
-- System directly invokes backup fusion, WAL replay, or storage node isolation
-- AI only monitors execution state and generates post-incident reports
-
-### 2. Anomaly Diagnosis Tree (DAG Constraint)
-- Planning Agent actions constrained by pre-configured DAG (similar to GaussMaster)
-- DBAs define standard troubleshooting flowcharts
-- LLM decides which branch to take in the DAG, cannot invent new steps
-- Any deviation from diagnosis tree is intercepted by Orchestrator
-
-### 3. Dynamic Closed-Loop Critic Review
-- Validation Agent has permission to issue harmless observation queries (EXPLAIN, system views)
-- When Diagnostic Agent produces root cause hypothesis, Validation Agent generates probe code
-- Physical environment data used as counter-evidence to challenge hypotheses
-- Only physically-verified root cause chains enter final DBA review report
-
-### 4. Dual-Stack MCP Isolation Architecture
-- **Read MCP**: Regular service credentials for data collection and diagnosis
-- **Write MCP**: OAuth identity passthrough bound to specific DBA's system permissions
-- Write MCP includes regex matching and semantic-based instruction circuit breaker (DLP)
-- Any payload attempting privilege escalation or large-scale table locking is permanently rejected at protocol layer
-
-### 5. Atomic Snapshot & MVCC Rollback Anchor
-- Before applying tuning changes, system automatically injects volume snapshot or savepoint
-- 5-minute health check period after changes applied
-- If key business metrics degrade unexpectedly, system auto-rolls back without human intervention
-- Uses `ROLLBACK TO SAVEPOINT` or snapshot restoration
-
-## Python Environment Rules
-
-**MANDATORY**: All Python commands in this project must be run via Poetry:
+This project uses `uv` for dependency management.
 
 ```bash
-poetry run python <script.py>
-poetry run pytest
-poetry run uvicorn ...
+# Install dependencies
+uv sync
+
+# Run the integration test (end-to-end graph execution with mock MCP)
+uv run python tests/test_graph.py
+
+# Run a specific MCP server standalone (for manual inspection)
+uv run -m graphdba.mcp.server_read
+uv run -m graphdba.mcp.server_write
 ```
 
-**FORBIDDEN**:
-- `source venv/bin/activate` or `source .venv/bin/activate`
-- `conda activate` or any conda environment activation
-- Direct `python` / `python3` calls outside of `poetry run`
-- Installing packages with `pip install` directly
+Configuration is loaded from a `.env` file using nested delimiter `__`. Example:
+```
+DATABASE__HOST=localhost
+DATABASE__PORT=5432
+LLM__DEEPSEEK_KEY=sk-...
+AGENT__MAX_RETRIES=5
+```
 
-Use `poetry add <package>` to add dependencies and `poetry install` to set up the environment.
+## Architecture
 
-## Development Guidelines
+### Agent Graph (`src/graphdba/agents/`)
 
-### When Working with Agent Code
-- Never allow agents direct database write access without DBA approval
-- All agent-generated SQL must pass through MCP gateway validation
-- Implement timeout and row-limit protections for all queries
-- Use MVCC and savepoints to wrap all tuning operations in rollback-capable transactions
+A LangGraph `StateGraph` that implements a multi-agent pipeline for automated PostgreSQL anomaly diagnosis. The graph is built in `src/graphdba/agents/graph.py` via `build_graph()`.
 
-### When Implementing MCP Servers
-- Enforce strict read/write separation
-- Implement identity passthrough for write operations
-- Add protocol-layer guardrails: row limits, timeouts, read-only enforcement
-- Use TOML/YAML for multi-database connection multiplexing
+**Node execution order:**
 
-### When Building RAG Components
-- Convert time-series metrics to semantic text before embedding
-- Use hybrid retrieval (BM25 + semantic) with RRF reranking
-- Maintain feedback store to capture DBA refinements
-- Ensure citation tracking so DBAs can verify source of recommendations
+```
+START → triage_node → diagnostic_node → validation_node → planning_node
+                           ↑                  |
+                           └──(retry loop)────┘
+                                              ↓
+                                    [INTERRUPT: wait for human approval]
+                                              ↓
+                                       execution_node → END
+```
 
-### When Designing Multi-Agent Workflows
-- Decompose tasks into specialized agents with narrow context windows
-- Use tree-search algorithms (Tree-of-Thought) for complex diagnostics
-- Implement cross-review between peer agents (e.g., CPU expert vs Lock expert)
-- Constrain exploration paths within pre-defined anomaly diagnosis trees
+**Routing logic** — all routing is driven by `WorkflowStatus` (a `StrEnum` in `src/graphdba/agents/state.py`):
+- `TRIAGED` → proceed to Diagnostic; anything else → END
+- `DIAGNOSED` → proceed to Validation; `FAILED` → END
+- `VALIDATED_SUCCESS` → proceed to Planning; `VALIDATED_FAIL` → retry Diagnostic if `attempt_count < max_retries`, else END
+- `PLANNED` → proceed to Execution (but graph is interrupted here); `FAILED` → END
 
-## Manual Testing Requirements
+**Human-in-the-Loop** is implemented via `interrupt_before=[NodeName.EXECUTION]` in `build_graph()`. After the graph suspends:
+1. Caller reads `graph.get_state(config)` to inspect `final_plan`
+2. Caller injects `approval_decision` + `human_feedback` via `graph.update_state(config, {...})`
+3. Caller resumes with `graph.astream(None, config)`
 
-Every phase and sub-task **must** include a `## Manual Testing` section in the corresponding code or documentation that records:
+**Node types:**
+- `triage_node` — pure function; deterministic bypass for physical errors; initializes state
+- `DiagnosticNode`, `ValidationNode`, `PlanningNode`, `ExecutionNode` — callable classes that take `llm` and/or `mcp_client` in `__init__`
 
-1. **Prerequisites** - What needs to be running or configured (e.g., PostgreSQL instance, env vars, Docker containers)
-2. **Step-by-step test commands** - Copy-pasteable shell commands the developer can run to verify correctness
-3. **Expected results** - Exact output, return values, or behaviors that confirm the task is working correctly
-4. **Negative tests** - Commands that should fail or be blocked, with the expected error message/behavior
-5. **Cleanup** - How to tear down any test resources
+**State** (`src/graphdba/agents/state.py`):
+- `AgentState` is the full shared TypedDict; nodes return `AgentStateUpdate` (partial, `total=False`)
+- `rejected_hypotheses` uses `Annotated[list, operator.add]` — it is append-only across retries
+- `current_hypotheses` is replaced each diagnostic cycle
 
-This ensures every piece of functionality can be independently verified by a human before moving to the next task. Do not mark a task as complete without providing these manual test instructions.
+### DiagnosticNode — key design details
 
-## Critical Safety Rules
+- Calls `mcp_client.list_tools()` at runtime to inject available tool descriptions into the LLM prompt
+- Generates 1–3 `Hypothesis` objects with `validation_actions` (MCP tool name + payload)
+- Deduplicates hypotheses both within a batch (intra) and against `rejected_hypotheses` (inter) using `difflib.SequenceMatcher` with a 0.80 similarity threshold
+- An `INCONCLUSIVE` hypothesis is only blocked from retry if the exact same tools are proposed again
 
-1. **Never bypass physical deterministic repair** - For storage-layer errors, use verified scripts only
-2. **Always create snapshot anchors** - Before any tuning operation, create rollback point
-3. **Enforce Human-in-the-loop** - DBA must approve all structural changes
-4. **Validate with physical data** - Use Critic agents to verify hypotheses against real database state
-5. **Implement circuit breakers** - Timeout, row limits, and read-only modes are mandatory
-6. **Use identity passthrough** - Write operations must inherit DBA's actual permissions
+### MCP Servers (`src/graphdba/mcp/`)
 
-## References
+Two separate FastMCP servers launched as subprocesses via `stdio_client`:
+- `server_read.py` — read-only tools: `explain_query`, `execute_safe_select`, `get_pg_stat_statements`, `get_blocking_locks`
+- `server_write.py` — write tools: `propose_ticket`, `approve_ticket`, `execute_ticket`
 
-### Key Academic Papers (2024-2026)
-- AgentTune (SIGMOD 2025/2026): LLM-based database knob tuning with range pruner
-- Rabbit (ICDE 2025): RAG-enabled database tuning with multi-agent domain pruning
-- D-Bot (SIGMOD-Companion 2025): LLM-powered DBA copilot with group discussion mechanism
-- GaussMaster (arXiv 2025): Anomaly diagnosis trees for deterministic tool orchestration
-- MA-RCA (Springer 2026): Multi-agent framework for root cause analysis with hallucination suppression
+`src/graphdba/config/dependencies.py` manages MCP client lifecycle via `@asynccontextmanager get_mcp_client(is_read: bool)`.
 
-### Key Open Source Projects
-- **eosphoros-ai/DB-GPT**: Database multi-agent framework with AWEL workflow language
-- **bytebase/dbhub**: Lightweight database MCP gateway with built-in guardrails
-- **infiniflow/ragflow**: Production-grade RAG with deep document understanding and citation tracking
+### Mock Testing (`tests/`)
 
-## Project Status
+`ManagedMockClient` (`tests/unit/managed_mock_client.py`) replaces the real MCP `ClientSession` for testing. It is loaded from a YAML fixture file.
 
-This is a research and design phase project (v1.0). The markdown document contains the theoretical foundation and architectural blueprint for implementation.
+**YAML fixture structure** (`tests/fixtures/*.yaml`):
+```yaml
+alert_payload:        # matches AlertPayload field aliases (fingerprint, alertname, etc.)
+  fingerprint: "..."
+  alertname: "..."
+  ...
+
+mock_responses:       # keyed by MCP tool name
+  get_blocking_locks:
+    data: "..."       # raw string returned by call_tool()
+  execute_safe_select:
+    data: "..."
+```
+
+**Known flaws in the current mock** (current blocker per `architecture.md`):
+1. `list_tools()` returns a hardcoded tool list, not derived from the YAML — the LLM sees tools that may not match the fixture's `mock_responses` keys
+2. `call_tool()` matches only by tool name, ignoring `arguments` — cannot simulate different responses for the same tool called with different parameters
+3. The fixture's `alert_payload` is never used by `test_graph.py`; the test hardcodes its own `AlertPayload` inline instead
+
+### LLM Configuration
+
+Two LLM instances are used (both DeepSeek, configured in `src/graphdba/config/dependencies.py`):
+- `llm_reasoning` — `max_tokens=3000`, `temperature=0.0`; used by DiagnosticNode and PlanningNode
+- `llm_chat` — `max_tokens=1000`, `temperature=0.0`, thinking disabled; used by ValidationNode
+
+All LLM-calling nodes use `tenacity` retry with exponential backoff (2 attempts) and `asyncio.wait_for` timeouts (15s–50s depending on node).

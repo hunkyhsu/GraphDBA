@@ -1,65 +1,13 @@
-# Python
+# Python-generated files
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
+*.py[oc]
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+*.egg-info
+
+# Virtual environments
+.venv
 
 # Environment variables
-.env.dev
-.env.local
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Logs
-*.log
-logs/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# MCP Server
-mcp_server_data/
-
-# Kubernetes secrets
-k8s/secrets/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
+.env

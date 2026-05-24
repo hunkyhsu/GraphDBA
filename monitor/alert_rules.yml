@@ -1,0 +1,12 @@
+groups:
+  - name: postgres_cluster_faults
+    rules:
+      - alert: PostgreSQLRowLockContention
+        # 核心表达式：检测是否存在处于等待/持有状态的冲突锁
+        expr: pg_stat_activity_count{wait_event_type="Lock"} > 0
+        for: 5s # 本地测试设为 5 秒，快速触发
+        labels:
+          severity: high
+        annotations:
+          summary: "Database row-level lock contention detected"
+          description: "Instance {{ $labels.instance }} in database {{ $labels.datname }} has active lock blocking. Queries are waiting indefinitely."
