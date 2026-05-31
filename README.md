@@ -7,6 +7,14 @@ Seed users data:
     uv run python scripts/seed_auth.py
 FastAPI:
     uv run uvicorn graphdba.app.app:app --reload --port 8000
+git commit:
+    git add .
+    git commit -m "message"
+    git push
+frontend run:
+    cd frontend
+    npm install
+    npm run dev
 
 
 > 在 PostgreSQL 的生态中，已经有成熟的 DBA 诊断工具箱和规范、标准的诊断流程，所以在实际生产环境中的 DBA 是不是会比较清闲，然后我再用 AI 做一个 agent DBA 其实用处不大？
