@@ -1,7 +1,7 @@
---- 1. Alerts Table
+--- 1. Alerts Table (16 fields)
 CREATE TABLE IF NOT EXISTS alerts (
     alert_id UUID PRIMARY KEY,
-    fingerprint TEXT NOT NULL UNIQUE,
+    fingerprint TEXT NOT NULL,
 
     alertname TEXT NOT NULL,
     severity TEXT NOT NULL,
@@ -11,20 +11,17 @@ CREATE TABLE IF NOT EXISTS alerts (
 
     raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
 
-    status TEXT NOT NULL CHECK (
+    status TEXT DEFAULT 'RECEIVED' NOT NULL CHECK (
         status IN (
             'RECEIVED',
-            'TRIAGING',
-            'DIAGNOSING',
-            'VALIDATING',
-            'PLANNING',
-            'PROPOSING',
-            'EXECUTING',
+            'RUNNING',
+            'WAITING_APPROVAL',
             'SOLVED',
+            'RESOLVED',
             'ESCALATED',
             'FAILED'
         )
-    ),
+    ) ,
 
     escalation_reason TEXT,
     failure_reason TEXT,
@@ -35,6 +32,9 @@ CREATE TABLE IF NOT EXISTS alerts (
     solved_at TIMESTAMPTZ,
     resolved_at TIMESTAMPTZ
 );
+CREATE UNIQUE INDEX idx_alerts_unique_active_fingerprint
+ON alerts(fingerprint)
+WHERE status NOT IN ('SOLVED', 'FAILED', 'ESCALATED');
 
 --- 2. Hypotheses Table
 CREATE TABLE IF NOT EXISTS hypotheses (

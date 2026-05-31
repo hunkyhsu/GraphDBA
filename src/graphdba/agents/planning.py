@@ -115,13 +115,13 @@ class PlanningNode:
         if fail_reason:
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": fail_reason
+                "terminal_message": fail_reason
             }
         if result.require_human_escalation:
             logger.warning("Planning escalation required. Reason: %s", result.escalation_reason)
             return {
                 "workflow_status": WorkflowStatus.ESCALATED.value,
-                "failed_reason": f"Human escalation required: {result.escalation_reason}"
+                "terminal_message": f"Human escalation required: {result.escalation_reason}"
             }
         logger.info("Plan created successfully")
         final_plan: FinalPlan = result.plan

@@ -1,22 +1,33 @@
 from typing import cast, Any
 import asyncpg
-import jwt
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from langgraph.graph.state import CompiledStateGraph
 from mcp.client.session import ClientSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from graphdba.config.settings import get_settings
+from graphdba.app.core.security import decode_access_token
+from graphdba.agents.runtime import AgentRuntime
+from graphdba.database.models.user import User
+from graphdba.database.repositories import users
+from graphdba.database.session import get_session
 
 
-def get_graph(request: Request) -> CompiledStateGraph:
-    return cast(CompiledStateGraph, request.app.state.graph)
+def get_agent_runtime(request: Request) -> AgentRuntime:
+    return cast(AgentRuntime, request.app.state.agent_runtime)
 
-def get_mcp_read(request: Request) -> ClientSession:
-    return cast(ClientSession, request.app.state.mcp_read)
 
-def get_mcp_write(request: Request) -> ClientSession:
-    return cast(ClientSession, request.app.state.mcp_write)
+async def get_graph(request: Request) -> CompiledStateGraph:
+    return await get_agent_runtime(request).get_graph()
+
+
+async def get_mcp_read(request: Request) -> ClientSession:
+    return await get_agent_runtime(request).get_mcp_read()
+
+
+async def get_mcp_write(request: Request) -> ClientSession:
+    return await get_agent_runtime(request).get_mcp_write()
 
 def get_pool(request: Request) -> asyncpg.Pool:
     return cast(asyncpg.Pool, request.app.state.pool)
@@ -29,12 +40,29 @@ async def get_raw_token(credentials: HTTPAuthorizationCredentials = Depends(secu
 async def get_verified_token(credentials: HTTPAuthorizationCredentials = Depends(security_schema)) -> dict[str, Any]:
     """Validates JWT signature and expiry; raises 401 on failure."""
     try:
-        settings = get_settings()
-        payload = jwt.decode(credentials.credentials, settings.security.oauth_secret, algorithms=["HS256"])
-        if not payload.get("pg_role"):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing role claim")
-        return payload
-    except jwt.ExpiredSignatureError:
+        return decode_access_token(credentials.credentials)
+    except ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
-    except jwt.InvalidTokenError:
+    except InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+async def get_current_user(
+    token_payload: dict[str, Any] = Depends(get_verified_token),
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    user_id = token_payload.get("sub")
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject")
+
+    try:
+        parsed_user_id = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+
+    user = await users.get_user_by_id(session, parsed_user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
+    return user

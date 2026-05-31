@@ -33,12 +33,17 @@ tool_descriptions:
   explain_query: >
     Runs EXPLAIN [ANALYZE] on a given SELECT query and returns the
     execution plan. Accepts query and run_analyze (bool).
-  execute_safe_write: >
-    Executes a pre-approved write SQL statement inside a safe transaction.
-    Used by the execution node to apply remediation steps.
-  propose_tuning_action: >
+  create_alert: >
+    Inserts an alert record for workflow tracking.
+  get_alert: >
+    Fetches one alert by alert_id or fingerprint.
+  update_alert_status: >
+    Updates an alert workflow status.
+  propose_ticket: >
     Stages a tuning action ticket for DBA approval without executing it.
-  execute_approval_action: >
+  approve_ticket: >
+    Records DBA approval for a staged ticket.
+  execute_ticket: >
     Executes a previously approved change ticket by ticket_id.
 
 # Mock responses keyed by MCP tool name.
@@ -90,14 +95,26 @@ mock_responses:
       ], "analyzed": false}
 
   # ── write tools ─────────────────────────────────────────────────────────────
-  execute_safe_write:
-    data: "SUCCESS: statement executed and committed."
-
-  propose_tuning_action:
+  create_alert:
     data: >
-      {"status": "STAGED", "ticket_id": "mock-ticket-001",
-       "message": "Action paused. Awaiting human DBA approval via the dashboard."}
+      {"alert_id": "11111111-1111-1111-1111-111111111111",
+       "fingerprint": "alert_deadlock_001", "status": "RECEIVED"}
 
-  execute_approval_action:
+  get_alert:
     data: >
-      {"status": "SUCCESS", "message": "Action executed and committed safely."}
+      {"alert_id": "11111111-1111-1111-1111-111111111111",
+       "fingerprint": "alert_deadlock_001", "status": "RECEIVED"}
+
+  update_alert_status:
+    data: >
+      {"alert_id": "11111111-1111-1111-1111-111111111111",
+       "fingerprint": "alert_deadlock_001", "status": "PLANNING"}
+
+  propose_ticket:
+    data: "mock-ticket-001"
+
+  approve_ticket:
+    data: "mock-ticket-001"
+
+  execute_ticket:
+    data: "SUCCESS"

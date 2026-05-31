@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from graphdba.agents.state import AgentState, NodeName, WorkflowStatus
-from graphdba.agents.triage import triage_node
+from graphdba.agents.triage import TriageNode
 from graphdba.agents.diagnostic import DiagnosticNode
 from graphdba.agents.validation import ValidationNode
 from graphdba.agents.planning import PlanningNode
@@ -77,7 +77,7 @@ def build_graph(
     logger.info("Starting to orchestrate the graph state...")
     builder = StateGraph(AgentState)
     # 1. nodes
-    builder.add_node(NodeName.TRIAGE, triage_node)
+    builder.add_node(NodeName.TRIAGE, TriageNode(mcp_client=mcp_write_client))
     builder.add_node(NodeName.DIAGNOSTIC, DiagnosticNode(llm=llm_reasoning, mcp_client=mcp_read_client, embeddings=embedding))
     builder.add_node(NodeName.VALIDATION, ValidationNode(llm=llm_chat, mcp_client=mcp_read_client))
     builder.add_node(NodeName.PLANNING, PlanningNode(llm=llm_reasoning))

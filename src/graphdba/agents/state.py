@@ -7,15 +7,12 @@ from pydantic import BaseModel, Field
 # Data Model(Schema)
 class AlertPayload(BaseModel):
     """Schema of alert"""
-    id: str = Field(alias="fingerprint", description="Unique identity of an alert")
+    id: str = Field(description="Unique identity of an alert")
     name: str = Field(alias="alertname", description="The structured name of an alert(brief name)")
     instance: str = Field(description="Address of alerted database (IP:Port)")
-    severity: Literal["critical", "high", "warning", "info"] = Field(description="Severity level of an alert")
-    status: Literal["firing", "resolved"] = Field(description="firing->is happening, resolved->solved")
     summary: str = Field(description="Summary of an alert")
     description: str = Field(description="Detail of an alert")
-    starts_at: str = Field(alias="startsAt", description="The time alert happened")
-    raw_payload: dict[str, Any] = Field(description="Other messages from alert manager")
+    # raw_payload: dict[str, Any] = Field(description="Other messages from alert manager")
 
 class ValidationAction(BaseModel):
     tool_name: str = Field(description="MCP tool name for validation")
@@ -98,7 +95,7 @@ class AgentState(TypedDict):
     approval_decision: str | None
     # Feedback of human DBA when approval decision = rejected or modified
     human_feedback: str | None
-    failed_reason: str | None
+    terminal_message: str | None
 
 class AgentStateUpdate(AgentState, total=False): 
     """Partial update for AgentState""" 
@@ -115,7 +112,7 @@ class AgentStateValues(BaseModel):
     workflow_status: str
     approval_decision: str | None = None
     human_feedback: str | None = None
-    failed_reason: str | None = None
+    terminal_message: str | None = None
 
 class NodeName(StrEnum):
     TRIAGE = "triage_node"

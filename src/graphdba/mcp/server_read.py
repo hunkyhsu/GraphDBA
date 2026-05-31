@@ -7,13 +7,19 @@ from mcp.server.fastmcp import FastMCP
 
 from mcp.server.fastmcp import Context
 
+from graphdba.mcp.tools_write import DBOperationError
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+logger = logging.getLogger(__name__)
 from graphdba.mcp.models import ExplainQueryInput, SafeSelectInput, SlowQueryFilter
 from graphdba.database.connection_pool import read_lifespan
-from graphdba.mcp.tools_read import _explain_query, _execute_safe_select, _get_blocking_locks, _get_pg_stat_statements
+from graphdba.mcp.tools_read import (
+    _get_alert_by_fingerprint, _get_alert_by_id,
+    _explain_query, _execute_safe_select, _get_blocking_locks, _get_pg_stat_statements
+)
 
 mcp_read = FastMCP("Read MCP Server", lifespan=read_lifespan)
 
@@ -29,6 +35,38 @@ def inject_pool(func):
             kwargs["pool"] = context.request_context.lifespan_context["db_pool"]
         return await func(*args, **kwargs)
     return wrapper
+
+@mcp_read.tool()
+@inject_pool
+async def get_alert_by_fingerprint(fingerprint: str, context: Context, pool = None) -> dict[str, Any]:
+    try:
+        result = await _get_alert_by_fingerprint(fingerprint, pool)
+        if result:
+            logger.warning("Found active alert with same fingerprint %s", fingerprint)
+            return {
+                "status": "active",
+                "alert": {
+                    "alert_id": str(result["alert_id"]),
+                    "status": result["status"],
+                },
+            }
+        return {"status": "available", "message": f"Can not found active alert with same fingerprint {fingerprint}"}
+    except DBOperationError:
+        logger.exception("Unexcepected error in geting alert by fingerprint")
+        raise RuntimeError("MCP System Failure: DB is unavailable")
+
+@mcp_read.tool()
+@inject_pool
+async def get_alert_by_id(alert_id: str, context: Context, pool = None) -> dict:
+    try:
+        alert = await _get_alert_by_id(alert_id, pool)
+        if alert is None:
+            logger.warning(f"Alert ID [{alert_id}] not found")
+            return {"status": "not_found", "message": f"alert_id {alert_id} not found"}
+        return {"status": "success", "alert": alert.model_dump(mode="json")}
+    except DBOperationError:
+        logger.exception("Unexcepected error in geting alert by id")
+        raise RuntimeError("MCP System Failure: DB is unavailable")
 
 @mcp_read.tool()
 @inject_pool

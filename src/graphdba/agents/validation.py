@@ -124,7 +124,7 @@ class ValidationNode:
             if fail_reason:
                 return {
                     "workflow_status": WorkflowStatus.FAILED.value,
-                    "failed_reason": fail_reason
+                    "terminal_message": fail_reason
                 }              
             hypothesis.status = result.validation_status
             hypothesis.feedback = f"[Actual Output]: {aggregate_output[:self.STRING_CUT]}...\n [Feedback]: {result.reasoning}"

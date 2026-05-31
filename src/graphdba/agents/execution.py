@@ -24,7 +24,7 @@ class ExecutionNode:
             logger.warning("Ticket rejected by human DBA for reason: %s", reason)
             return {
                 "workflow_status": WorkflowStatus.COMPLETED.value,
-                "failed_reason": f"Human rejected: {reason}"
+                "terminal_message": f"Human rejected: {reason}"
             }
         # APPROVED
         logger.info("Executing ticket through MCP...")
@@ -44,13 +44,13 @@ class ExecutionNode:
         if fail_reason:
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": fail_reason,
+                "terminal_message": fail_reason,
             }
         if result.isError:
             error_text = result.content[0].text if result.content else "Unknown MCP tool error"
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": f"propose_ticket MCP tool error: {error_text}",
+                "terminal_message": f"propose_ticket MCP tool error: {error_text}",
             }
         logger.info("Successfully execute a ticket to TABLE change_tickets")
         return {

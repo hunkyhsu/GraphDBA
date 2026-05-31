@@ -80,7 +80,7 @@ START → triage_node → diagnostic_node → validation_node → planning_node
 
 Two separate FastMCP servers launched as subprocesses via `stdio_client`:
 - `server_read.py` — read-only tools: `explain_query`, `execute_safe_select`, `get_pg_stat_statements`, `get_blocking_locks`
-- `server_write.py` — write tools: `propose_ticket`, `approve_ticket`, `execute_ticket`
+- `server_write.py` — write tools: `create_alert`, `get_alert`, `update_alert_status`, `propose_ticket`, `approve_ticket`, `execute_ticket`
 
 `src/graphdba/config/dependencies.py` manages MCP client lifecycle via `@asynccontextmanager get_mcp_client(is_read: bool)`.
 

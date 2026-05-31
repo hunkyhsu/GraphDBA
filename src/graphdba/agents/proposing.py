@@ -44,13 +44,13 @@ class ProposingNode:
         if fail_reason:
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": fail_reason,
+                "terminal_message": fail_reason,
             }
         if result.isError:
             error_text = result.content[0].text if result.content else "Unknown MCP tool error"
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": f"propose_ticket MCP tool error: {error_text}",
+                "terminal_message": f"propose_ticket MCP tool error: {error_text}",
             }
         logger.info("Successfully propose a ticket to TABLE change_tickets")
         return {

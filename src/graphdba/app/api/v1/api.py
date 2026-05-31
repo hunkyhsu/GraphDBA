@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from graphdba.app.api.v1.endpoints import runs
 from graphdba.app.api.v1.endpoints import alerts
 from graphdba.app.api.v1.endpoints import login
+from graphdba.app.api.v1.endpoints import me
 from graphdba.app.api.v1.endpoints import stream_run
 from graphdba.app.api.v1.endpoints import approve_run
 
@@ -16,7 +17,12 @@ api_router.include_router(
 api_router.include_router(
     login.router,
     prefix="/login",
-    tags=["Database role login"]
+    tags=["Login"]
+)
+
+api_router.include_router(
+    me.router,
+    tags=["Login"]
 )
 
 api_router.include_router(

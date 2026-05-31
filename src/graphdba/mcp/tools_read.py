@@ -1,15 +1,43 @@
-from __future__ import annotations
-from typing import Any, TYPE_CHECKING
 import logging
-from graphdba.mcp.guard_read import ReadSecurityError, validate_query, limit_rows
-from graphdba.config.settings import get_settings
-from graphdba.utils.external_call import db_readonly_fetch
+import asyncpg
+from typing import Any
 
-if TYPE_CHECKING:
-    import asyncpg
-    from graphdba.mcp.models import ExplainQueryInput, SlowQueryFilter, SafeSelectInput
+from graphdba.config.settings import get_settings
+from graphdba.mcp.tools_write import DBOperationError
+from graphdba.utils.external_call import db_readonly_fetch
+from graphdba.mcp.guard_read import ReadSecurityError, validate_query, limit_rows
+from graphdba.mcp.models import (
+    AlertResponse,
+    ExplainQueryInput, SlowQueryFilter, SafeSelectInput
+    )
+
 
 logger = logging.getLogger(__name__)
+# table alerts
+async def _get_alert_by_fingerprint(fingerprint: str, pool: asyncpg.Pool) -> dict[str, Any] | None:
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"""
+                SELECT alert_id, status 
+                FROM alerts 
+                WHERE fingerprint = $1
+                    AND status NOT IN ('SOLVED', 'FAILED', 'ESCALATED')
+                    LIMIT 1;
+                """,
+                fingerprint
+            )
+            return dict(row) if row else None
+    except Exception as e:
+        raise DBOperationError("Internal database error") from e
+
+async def _get_alert_by_id(alert_id: str, pool: asyncpg.Pool) -> AlertResponse | None:
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(f"SELECT * FROM alerts WHERE alert_id = $1;", alert_id)
+        return AlertResponse.model_validate(dict(row)) if row else None
+    except Exception as e:
+        raise DBOperationError("Internal database error") from e
 
 async def _explain_query(input_data: ExplainQueryInput, pool: asyncpg.Pool) -> dict[str, Any]:
     try:

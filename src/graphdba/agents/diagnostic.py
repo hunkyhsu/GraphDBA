@@ -194,7 +194,7 @@ class DiagnosticNode:
         if tools_error:
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": f"Tools initialization failed: {tools_error}"
+                "terminal_message": f"Tools initialization failed: {tools_error}"
             }
         chain: RunnableSequence[dict, DiagnosticOutput] = self.prompt | self.structured_llm
         result, failure = await llm_call_with_retry(
@@ -215,7 +215,7 @@ class DiagnosticNode:
         if failure:
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": failure
+                "terminal_message": failure
             }
         try:
             # logger.info("Diagnostic LLM output is %s", result.model_dump_json())
@@ -223,27 +223,27 @@ class DiagnosticNode:
                 logger.warning("Diagnostic escalation required. Reason: %s", result.escalation_reason)
                 return {
                     "workflow_status": WorkflowStatus.ESCALATED.value,
-                    "failed_reason": f"Human escalation required: {result.escalation_reason}"
+                    "terminal_message": f"Human escalation required: {result.escalation_reason}"
                 }
                       
             inter_hypotheses, fail_reason_inter = await self.inter_batch_filter(result.hypotheses, rejected_hypotheses)
             if fail_reason_inter:
                 return {
                     "workflow_status": WorkflowStatus.FAILED.value,
-                    "failed_reason": "In inter-batch filter: " + fail_reason_inter
+                    "terminal_message": "In inter-batch filter: " + fail_reason_inter
                 }
             intra_hypotheses, fail_reason_intra = await self.intra_batch_filter(inter_hypotheses)
             if fail_reason_intra:
                 return {
                     "workflow_status": WorkflowStatus.FAILED.value,
-                    "failed_reason": "In intra-batch filter: " + fail_reason_intra
+                    "terminal_message": "In intra-batch filter: " + fail_reason_intra
                 }
             logger.info("Diagnosis completed. Propose %s valid hypotheses", len(intra_hypotheses))
             if len(intra_hypotheses) == 0:
                 logger.error("All generated hypotheses were duplicates of rejected ones. Hypothesis space exhausted")
                 return {
                     "workflow_status": WorkflowStatus.FAILED.value,
-                    "failed_reason": "All hypotheses are filtered because similar to rejected hypotheses."
+                    "terminal_message": "All hypotheses are filtered because similar to rejected hypotheses."
                 }
             return {
                 "workflow_status": WorkflowStatus.DIAGNOSED.value,
@@ -254,5 +254,5 @@ class DiagnosticNode:
             logger.exception("Unexpected error during diagnostic node execution")
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "failed_reason": f"Diagnostic logic failure: {type(e).__name__}"
+                "terminal_message": f"Diagnostic logic failure: {type(e).__name__}"
             }

@@ -4,7 +4,14 @@ from typing import Any
 from mcp.types import Tool, ListToolsResult
 
 _READ_TOOLS = {"get_blocking_locks", "execute_safe_select", "get_pg_stat_statements", "explain_query"}
-_WRITE_TOOLS = {"execute_safe_write", "propose_tuning_action", "execute_approval_action"}
+_WRITE_TOOLS = {
+    "create_alert",
+    "get_alert",
+    "update_alert_status",
+    "propose_ticket",
+    "approve_ticket",
+    "execute_ticket",
+}
 
 
 class ManagedMockClient:

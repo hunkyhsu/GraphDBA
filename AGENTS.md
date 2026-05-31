@@ -144,6 +144,9 @@ Read server: `graphdba.mcp.server_read`
 
 Write server: `graphdba.mcp.server_write`
 
+- `create_alert`
+- `get_alert`
+- `update_alert_status`
 - `propose_ticket`
 - `approve_ticket`
 - `execute_ticket`
@@ -196,8 +199,6 @@ Current mock behavior:
 Known alignment issues to fix before trusting integration coverage:
 
 - `ManagedMockClient.call_tool()` returns a plain string, while production MCP `call_tool()` returns an object with `isError` and `content`. Current agent nodes expect the production shape.
-- The mock write allowlist is stale: it includes `execute_safe_write`, `propose_tuning_action`, and `execute_approval_action`, while the current write server exposes `propose_ticket`, `approve_ticket`, and `execute_ticket`.
-- `tests/data/deadlock_sample.yaml` uses stale write tool names for mock responses and descriptions.
 - `tests/integration/test_workflow.py` is stale against source: it references `WorkflowStatus.PENDING`, calls `build_graph()` without the required `embedding` argument, and expects pre-proposing interrupt state as `PLANNED` even though the graph now goes through `proposing_node` before interrupting before execution.
 - Some unit tests construct `Hypothesis` with a removed `description` field and assert failure messages that no longer match current source.
 

@@ -1,10 +1,19 @@
 from pydantic import BaseModel, Field
 
+class AlertLabels(BaseModel):
+    alertname: str = Field(description="The name of the alert metric")
+    instance: str = Field(description="The target database instance host:port")
+    severity: str = Field(description="The severity of the alert")
+
+class AlertAnnotations(BaseModel):
+    summary: str
+    description: str | None = Field(default=None)
+
 class AlertItem(BaseModel):
     """Individual alert within the Alertmanager webhook payload."""
     status: str
-    labels: dict[str, str]
-    annotations: dict[str, str]
+    labels: AlertLabels
+    annotations: AlertAnnotations
     startsAt: str
     endsAt: str
     generatorURL: str = ""

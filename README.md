@@ -1,3 +1,14 @@
+RUN:
+alembic :
+    uv run alembic init migrations
+    uv run alembic revision --autogenerate -m "create auth metadata tables"
+    uv run alembic upgrade head
+Seed users data:
+    uv run python scripts/seed_auth.py
+FastAPI:
+    uv run uvicorn graphdba.app.app:app --reload --port 8000
+
+
 > 在 PostgreSQL 的生态中，已经有成熟的 DBA 诊断工具箱和规范、标准的诊断流程，所以在实际生产环境中的 DBA 是不是会比较清闲，然后我再用 AI 做一个 agent DBA 其实用处不大？
 
 这是一个非常深刻且扎根于现实的问题。看似“规范化”和“工具化”的 PostgreSQL 生态已经解决了大部分问题，但如果你深入 DBA 的日常，就会发现这个职业正在经历一场从“体力活”向“架构思维”的转型。
