@@ -1,21 +1,23 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 
 import { BrandMark } from "../../components/BrandMark";
 import { LoginShell } from "../../components/LoginShell";
 import { TextInput } from "../../components/TextInput";
 import { login, type LoginResponse } from "../../lib/api";
-import { clearSession, readSession, saveSession } from "../../lib/authStorage";
+import { saveSession } from "../../lib/authStorage";
 
-export function LoginPage() {
-  const existingSession = useMemo(() => readSession(), []);
+type LoginPageProps = {
+  onAuthenticated: (session: LoginResponse) => void;
+};
+
+export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [session, setSession] = useState<LoginResponse | null>(existingSession);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,20 +30,13 @@ export function LoginPage() {
         password,
       });
       saveSession(loginResponse, remember);
-      setSession(loginResponse);
+      onAuthenticated(loginResponse);
       setPassword("");
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Login failed.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  function handleSignOut() {
-    clearSession();
-    setSession(null);
-    setEmployeeId("");
-    setPassword("");
   }
 
   return (
@@ -56,36 +51,7 @@ export function LoginPage() {
         </p>
       </div>
 
-      {session ? (
-        <div className="mt-8 space-y-5">
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-left">
-            <p className="text-sm font-semibold text-emerald-900">
-              Signed in as {session.user.name}
-            </p>
-            <p className="mt-1 text-sm text-emerald-800">
-              Employee ID: {session.user.employee_id}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {session.roles.map((role) => (
-                <span
-                  key={role.id}
-                  className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200"
-                >
-                  {role.name}
-                </span>
-              ))}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="h-11 w-full rounded-md border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            Sign out
-          </button>
-        </div>
-      ) : (
-        <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
+      <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
           <label className="block text-left">
             <span className="text-sm font-semibold text-slate-800">
               Employee ID
@@ -162,8 +128,7 @@ export function LoginPage() {
           >
             {isSubmitting ? "Signing in..." : "Log In"}
           </button>
-        </form>
-      )}
+      </form>
 
       <div className="mt-7 border-t border-slate-200 pt-5 text-center text-xs text-slate-400">
         © 2026 GraphDBA. All rights reserved.

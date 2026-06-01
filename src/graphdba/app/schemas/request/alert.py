@@ -1,11 +1,22 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class AlertLabels(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     alertname: str = Field(description="The name of the alert metric")
     instance: str = Field(description="The target database instance host:port")
     severity: str = Field(description="The severity of the alert")
+    cluster_name: str | None = None
+    database_name: str | None = None
+    database_role: str | None = None
+    host: str | None = None
+    port: int | None = None
+    environment: str | None = None
+    region: str | None = None
 
 class AlertAnnotations(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     summary: str
     description: str | None = Field(default=None)
 

@@ -77,12 +77,12 @@ def build_graph(
     logger.info("Starting to orchestrate the graph state...")
     builder = StateGraph(AgentState)
     # 1. nodes
-    builder.add_node(NodeName.TRIAGE, TriageNode(mcp_client=mcp_write_client))
+    builder.add_node(NodeName.TRIAGE, TriageNode())
     builder.add_node(NodeName.DIAGNOSTIC, DiagnosticNode(llm=llm_reasoning, mcp_client=mcp_read_client, embeddings=embedding))
     builder.add_node(NodeName.VALIDATION, ValidationNode(llm=llm_chat, mcp_client=mcp_read_client))
     builder.add_node(NodeName.PLANNING, PlanningNode(llm=llm_reasoning))
-    builder.add_node(NodeName.PROPOSING, ProposingNode(mcp_client=mcp_write_client))
-    builder.add_node(NodeName.EXECUTION, ExecutionNode(mcp_client=mcp_write_client))
+    builder.add_node(NodeName.PROPOSING, ProposingNode())
+    builder.add_node(NodeName.EXECUTION, ExecutionNode())
     # 2. edges
     builder.add_edge(START, NodeName.TRIAGE)
 
@@ -102,4 +102,3 @@ def build_graph(
     )
     logger.info("Orchestration completed")
     return graph
-

@@ -1,7 +1,6 @@
 import logging
 import re
 from datetime import datetime, timezone
-from mcp.client.session import ClientSession
 
 from graphdba.agents.get_alert_status import get_alert_status
 from graphdba.agents.update_alert import update_alert
@@ -18,22 +17,20 @@ class TriageNode:
         "PostgreSQLConnectionsExhausted",
     }
 
-    def __init__(self, mcp_write_client: ClientSession, mcp_read_client: ClientSession):
-        self.mcp_write_client = mcp_write_client
-        self.mcp_read_client = mcp_read_client
+    def __init__(self):
+        pass
     
     async def __call__(self, state: AgentState) -> AgentStateUpdate:
         alert = AlertPayload.model_validate(state['alert'])
         logger.info("Received the alert: %s-%s", alert.id, alert.name)
         # 0. Crash Recovery
         current_alert_status, fail_reason = await get_alert_status(
-            mcp_client=self.mcp_read_client,
             alert_id=alert.id,
         )
         if fail_reason:
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": f"Failed to get alert status: {error}"
+                "terminal_message": f"Failed to get alert status: {fail_reason}"
             }
         if current_alert_status == "SOLVED":
             return {
@@ -64,7 +61,6 @@ class TriageNode:
                 # ....
                 logger.info("Automated self-healing script executing for alert %s ...", alert.name)
                 error = await update_alert(
-                    mcp_client=self.mcp_write_client,
                     alert_id=alert.id,
                     # TODO: AlertStatus.SOLVED
                     status="SOLVED",
@@ -91,7 +87,6 @@ class TriageNode:
             logger.error("Fast path B triggered for alert %s", alert.name)
             reason = f"Detected physical error for {alert.name}, required human DBA"
             error = await update_alert(
-                mcp_client=self.mcp_write_client,
                 alert_id=alert.id,
                 status="ESCALATED",
                 escalation_reason=reason,
@@ -109,7 +104,6 @@ class TriageNode:
         # 3. State Initialization
         logger.info("Init the state and transfer to diagnostic node.")
         error = await update_alert(
-            mcp_client=self.mcp_write_client,
             alert_id=alert.id,
             status="RUNNING",
             clear_failure_reason=True,

@@ -6,6 +6,8 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from graphdba.agents.state import Hypothesis, HypothesisStatus, ValidationAction, WorkflowStatus
 from graphdba.utils.external_call import single_external_call, llm_call_with_retry
+from graphdba.database.repositories import hypotheses
+from graphdba.database.session import AsyncSessionLocal
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -116,6 +118,7 @@ class ValidationNode:
                     "confidence_score": hypothesis.confidence_score,
                     "expected": hypothesis.expected_result,
                     "actual": aggregate_output[:self.STRING_CUT],
+                    "error_feedback": "",
                 },
                 timeout=self.LLM_TIMEOUT_S,
                 max_retry=self.MAX_RETRY,
@@ -135,6 +138,22 @@ class ValidationNode:
                 updated_current.append(hypothesis)
                 logger.info("Current hypothesis is verified")                
         validation_status: WorkflowStatus = WorkflowStatus.VALIDATED_SUCCESS if len(updated_current) > 0 else WorkflowStatus.VALIDATED_FAIL
+        persisted_hypotheses = [*updated_current, *rejected_list]
+        try:
+            async with AsyncSessionLocal() as session:
+                await hypotheses.upsert_hypotheses(
+                    session,
+                    alert_id=state["alert"]["id"],
+                    attempt_count=state.get("attempt_count", 0),
+                    hypotheses=[h.model_dump(mode="json") for h in persisted_hypotheses],
+                )
+                await session.commit()
+        except Exception as exc:
+            logger.exception("Failed to persist hypotheses")
+            return {
+                "workflow_status": WorkflowStatus.FAILED.value,
+                "terminal_message": f"Failed to persist hypotheses: {exc}",
+            }
         return {
             "workflow_status": validation_status.value,
             "current_hypotheses": [h.model_dump(mode="json") for h in updated_current],

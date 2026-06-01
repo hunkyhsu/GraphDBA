@@ -11,7 +11,7 @@ api_router = APIRouter()
 api_router.include_router(
     alerts.router,
     prefix="/alerts",
-    tags=["Get alert payload from alert manager"]
+    tags=["Alerts"]
 )
 
 api_router.include_router(

@@ -1,20 +1,18 @@
 from __future__ import annotations
 import logging
-import asyncio
 from typing import TYPE_CHECKING
 from graphdba.agents.state import ApprovalDecision, WorkflowStatus
-from graphdba.utils.external_call import single_external_call
+from graphdba.database.repositories import tickets
+from graphdba.database.session import AsyncSessionLocal
 
 if TYPE_CHECKING:
-    from mcp.client.session import ClientSession
-    from graphdba.agents.state import AgentState, AgentStateUpdate, FinalPlan
+    from graphdba.agents.state import AgentState, AgentStateUpdate
 
 logger = logging.getLogger(__name__)
 
 class ExecutionNode:
-    MCP_TIMEOUT_S = 30.0
-    def __init__(self, mcp_client: ClientSession):
-        self.mcp_client = mcp_client
+    def __init__(self):
+        pass
     
     async def __call__(self, state: AgentState) -> AgentStateUpdate:
         decision = state["approval_decision"]
@@ -26,31 +24,15 @@ class ExecutionNode:
                 "workflow_status": WorkflowStatus.COMPLETED.value,
                 "terminal_message": f"Human rejected: {reason}"
             }
-        # APPROVED
-        logger.info("Executing ticket through MCP...")
-        result, fail_reason = await single_external_call(
-            coro=self.mcp_client.call_tool(
-                name="execute_ticket",
-                arguments={
-                    "input_data": {
-                        "ticket_id": state["ticket_id"],
-                    }
-                }
-            ),
-            timeout=self.MCP_TIMEOUT_S,
-            label="Executing Ticket",
-            logger=logger
-        )
-        if fail_reason:
+        logger.info("Executing ticket through SQLAlchemy repository...")
+        try:
+            async with AsyncSessionLocal() as session:
+                await tickets.execute_ticket(session, state["ticket_id"])
+        except Exception as exc:
+            logger.exception("Ticket execution failed")
             return {
                 "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": fail_reason,
-            }
-        if result.isError:
-            error_text = result.content[0].text if result.content else "Unknown MCP tool error"
-            return {
-                "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": f"propose_ticket MCP tool error: {error_text}",
+                "terminal_message": f"execute ticket failed: {exc}",
             }
         logger.info("Successfully execute a ticket to TABLE change_tickets")
         return {

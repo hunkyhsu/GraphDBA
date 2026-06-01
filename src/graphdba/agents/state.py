@@ -10,9 +10,10 @@ class AlertPayload(BaseModel):
     id: str = Field(description="Unique identity of an alert")
     name: str = Field(alias="alertname", description="The structured name of an alert(brief name)")
     instance: str = Field(description="Address of alerted database (IP:Port)")
+    severity: str = Field(description="The severity of the alert")
     summary: str = Field(description="Summary of an alert")
     description: str = Field(description="Detail of an alert")
-    # raw_payload: dict[str, Any] = Field(description="Other messages from alert manager")
+    raw_payload: dict[str, Any] = Field(default_factory=dict, description="Other messages from alert manager")
 
 class ValidationAction(BaseModel):
     tool_name: str = Field(description="MCP tool name for validation")

@@ -14,23 +14,9 @@ What you listed — all valid:
 human escalation handler???
 dbmate, SQLAlchemy, SQLModel, Alembic
 --------------------------------------------------------------   
-curl -X POST http://localhost:8000/api/v1/alerts -H "Content-Type: application/json" -d @/Users/hunkyhsu/CursorProjects/demo/template.txt
 
-Read the files in 
-app
- , specially the api in 
-api.py
- , then use react + tailwind css to build a independent frontend subsytem on this project's root path, named as '/frontend'. This frontend act as a Agent-DBA management system. 1. it should have a login page, user(DBA) should provide a database role and database password to login. Then it would verify the role in 
-login.py
- and get the returned token for local storage. 2. The endpoints 
-runs.py
- and 
-stream_run.py
- need this token to be added in the header. 3. After login, it should have a manage page, in the left shows a side bar which has entries: coming alerts (see 
-alerts.py
- ), the agent graph real-time information (which node - doing what - result and so on) and the ticket list(can see the detailed information. table schema in 
-connection_pool.py
- ). 4. In entry alerts, when user click the it, the manage page right side should display a alert list, each element display alert id, alert summary, alert time, and a status identify comming, solving and solved. when user click a specific alert, it should change from a narrow rectangle to a large rectangle, which contains all the detailed message. 5. In entry agent graph, it should shows all the node connected as a graph visually. behind each node is the real-time information about the agent state.  And before each node's name should have a green point showing is active, a gray point showing is inactive. 6. In entry ticket, it also should shows a ticket list,  each element display ticket id, propose time , approve time, execute time, and a status identify pending, approved, executing and completed. The pending status should mark as RED and have small point in the entry 'ticket' as unread message. when user click a specific ticket, it should change from a narrow rectangle to a large rectangle, which contains all the detailed message.  7. The UI style should like Google Chrome.  You can read all the files in this root path to extend your information sources. You must question all your doubt before making changes or making real frontend.
+After login, it should have a manage page, in the left shows a side bar which has entries: coming alerts, the agent graph real-time information (which node - doing what - result and so on) and the ticket list(can see the detailed information.). 
+In entry alerts, when user click the it, the manage page right side should display a alert list, each element display alert id, alert summary, alert time, and a status identify comming, solving and solved. when user click a specific alert, it should change from a narrow rectangle to a large rectangle, which contains all the detailed message. 5. In entry agent graph, it should shows all the node connected as a graph visually. behind each node is the real-time information about the agent state.  And before each node's name should have a green point showing is active, a gray point showing is inactive. 6. In entry ticket, it also should shows a ticket list,  each element display ticket id, propose time , approve time, execute time, and a status identify pending, approved, executing and completed. The pending status should mark as RED and have small point in the entry 'ticket' as unread message. when user click a specific ticket, it should change from a narrow rectangle to a large rectangle, which contains all the detailed message.  7. The UI style should like Google Chrome.  You can read all the files in this root path to extend your information sources. You must question all your doubt before making changes or making real frontend.
 
 1. Pydantic request/response schemas
 2. auth/password utilities

@@ -15,6 +15,8 @@ frontend run:
     cd frontend
     npm install
     npm run dev
+alert mock request:
+    curl -X POST http://127.0.0.1:8000/api/v1/alerts -H "Content-Type: application/json" -d @/Users/hunkyhsu/CursorProjects/demo/template.txt
 
 
 > 在 PostgreSQL 的生态中，已经有成熟的 DBA 诊断工具箱和规范、标准的诊断流程，所以在实际生产环境中的 DBA 是不是会比较清闲，然后我再用 AI 做一个 agent DBA 其实用处不大？
