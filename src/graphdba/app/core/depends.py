@@ -4,7 +4,6 @@ from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from langgraph.graph.state import CompiledStateGraph
-from mcp.client.session import ClientSession
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from graphdba.app.core.security import decode_access_token
@@ -21,13 +20,6 @@ def get_agent_runtime(request: Request) -> AgentRuntime:
 async def get_graph(request: Request) -> CompiledStateGraph:
     return await get_agent_runtime(request).get_graph()
 
-
-async def get_mcp_read(request: Request) -> ClientSession:
-    return await get_agent_runtime(request).get_mcp_read()
-
-
-async def get_mcp_write(request: Request) -> ClientSession:
-    return await get_agent_runtime(request).get_mcp_write()
 
 def get_pool(request: Request) -> asyncpg.Pool:
     return cast(asyncpg.Pool, request.app.state.pool)

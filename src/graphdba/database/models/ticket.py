@@ -1,13 +1,16 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from graphdba.database.base import Base
+
+if TYPE_CHECKING:
+    from graphdba.database.models.alert import Alert
 
 
 class TicketStatus(StrEnum):
@@ -27,19 +30,19 @@ class TicketRiskLevel(StrEnum):
     CRITICAL = "CRITICAL"
 
 
-class ChangeTicket(Base):
-    __tablename__ = "change_tickets"
+class Ticket(Base):
+    __tablename__ = "tickets"
 
-    ticket_id: Mapped[uuid.UUID] = mapped_column(
+    id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
     alert_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("alerts.alert_id", ondelete="CASCADE"),
+        ForeignKey("alerts.id", ondelete="CASCADE"),
         nullable=False,
     )
-    target_hypothesis_id: Mapped[str] = mapped_column(
+    hypothesis_id: Mapped[str] = mapped_column(
         Text,
         nullable=False,
     )
@@ -111,6 +114,7 @@ class ChangeTicket(Base):
         default=dict,
         server_default=text("'{}'::jsonb"),
     )
+    alert: Mapped["Alert"] = relationship()
 
     __table_args__ = (
         CheckConstraint(

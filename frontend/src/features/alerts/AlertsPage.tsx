@@ -19,6 +19,7 @@ import {
 
 import { BrandMark } from "../../components/BrandMark";
 import {
+  DEFAULT_ALERT_PAGE_SIZE,
   getAlertDetail,
   getAlertStats,
   listAlerts,
@@ -267,7 +268,7 @@ export function AlertsPage({ session, onSignOut }: AlertsPageProps) {
   const [severity, setSeverity] = useState("All");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_ALERT_PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);

@@ -15,6 +15,9 @@ frontend run:
     cd frontend
     npm install
     npm run dev
+docker run:
+    docker compose up -d
+    docker compose down
 alert mock request:
     curl -X POST http://127.0.0.1:8000/api/v1/alerts -H "Content-Type: application/json" -d @/Users/hunkyhsu/CursorProjects/demo/template.txt
 

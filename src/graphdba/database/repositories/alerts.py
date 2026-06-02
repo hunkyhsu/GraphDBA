@@ -242,3 +242,8 @@ async def get_alert_stats(session: AsyncSession) -> dict[str, int]:
         "pending_review": row.pending_review,
         "resolved_24h": row.resolved_24h,
     }
+
+
+async def count_alerts_by_status(session: AsyncSession, status: str) -> int:
+    result = await session.execute(select(func.count()).select_from(Alert).where(Alert.status == status))
+    return result.scalar_one()

@@ -72,7 +72,6 @@ class WorkflowStatus(StrEnum):
     VALIDATED_FAIL = "validated_fail"
     PLANNED = "planned"
     PROPOSED = "proposed"
-    EXECUTED = "executed"
     COMPLETED = "completed"
     FAILED = "failed"
     ESCALATED = "escalated"
@@ -116,9 +115,6 @@ class AgentStateValues(BaseModel):
     terminal_message: str | None = None
 
 class NodeName(StrEnum):
-    TRIAGE = "triage_node"
     DIAGNOSTIC = "diagnostic_node"
     VALIDATION = "validation_node"
     PLANNING = "planning_node"
-    PROPOSING = "proposing_node"
-    EXECUTION = "execution_node"

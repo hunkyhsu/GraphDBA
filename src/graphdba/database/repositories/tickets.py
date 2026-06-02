@@ -2,10 +2,11 @@ import time
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import text
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from graphdba.database.models.change_ticket import ChangeTicket, TicketStatus
+from graphdba.database.models.alert import Alert
+from graphdba.database.models.ticket import Ticket, TicketStatus
 
 
 class TicketNotFoundError(Exception):
@@ -27,6 +28,110 @@ def _validate_single_statement(sql: str) -> None:
         raise TicketExecutionError("Multiple SQL statements are not supported")
 
 
+TICKET_SORT_COLUMNS = {
+    "created_at": Ticket.created_at,
+    "updated_at": Ticket.updated_at,
+    "status": Ticket.status,
+    "risk_level": Ticket.risk_level,
+}
+
+
+def _apply_ticket_filters(
+    stmt: Select,
+    *,
+    search: str | None = None,
+    status: str | None = None,
+):
+    if search:
+        pattern = f"%{search}%"
+        stmt = stmt.where(
+            or_(
+                Alert.name.ilike(pattern),
+                Alert.instance.ilike(pattern),
+                Alert.summary.ilike(pattern),
+                Ticket.change_reason.ilike(pattern),
+            )
+        )
+    if status and status.lower() != "all":
+        stmt = stmt.where(Ticket.status == status.upper())
+    return stmt
+
+
+async def get_ticket_by_id(session: AsyncSession, ticket_id: UUID | str) -> Ticket | None:
+    return await session.get(Ticket, UUID(str(ticket_id)))
+
+
+async def get_ticket_with_alert(
+    session: AsyncSession,
+    ticket_id: UUID | str,
+) -> tuple[Ticket, Alert] | None:
+    stmt = (
+        select(Ticket, Alert)
+        .join(Alert, Alert.id == Ticket.alert_id)
+        .where(Ticket.id == UUID(str(ticket_id)))
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    row = result.one_or_none()
+    return row if row is None else (row[0], row[1])
+
+
+async def list_tickets(
+    session: AsyncSession,
+    *,
+    search: str | None = None,
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str = "updated_at",
+    sort_dir: str = "desc",
+) -> tuple[list[tuple[Ticket, Alert]], int]:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    offset = (page - 1) * page_size
+
+    base_count = select(func.count()).select_from(Ticket).join(Alert, Alert.id == Ticket.alert_id)
+    count_stmt = _apply_ticket_filters(base_count, search=search, status=status)
+    total_result = await session.execute(count_stmt)
+    total = total_result.scalar_one()
+
+    sort_column = TICKET_SORT_COLUMNS.get(sort_by, Ticket.updated_at)
+    order_column = sort_column.asc() if sort_dir.lower() == "asc" else sort_column.desc()
+    list_stmt = (
+        _apply_ticket_filters(
+            select(Ticket, Alert).join(Alert, Alert.id == Ticket.alert_id),
+            search=search,
+            status=status,
+        )
+        .order_by(order_column, Ticket.id.desc())
+        .limit(page_size)
+        .offset(offset)
+    )
+    result = await session.execute(list_stmt)
+    return [(row[0], row[1]) for row in result.all()], total
+
+
+async def list_recent_pending_tickets(
+    session: AsyncSession,
+    *,
+    limit: int = 3,
+) -> list[tuple[Ticket, Alert]]:
+    stmt = (
+        select(Ticket, Alert)
+        .join(Alert, Alert.id == Ticket.alert_id)
+        .where(Ticket.status == TicketStatus.PENDING.value)
+        .order_by(Ticket.updated_at.desc(), Ticket.id.desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return [(row[0], row[1]) for row in result.all()]
+
+
+async def count_tickets_by_status(session: AsyncSession, status: str) -> int:
+    result = await session.execute(select(func.count()).select_from(Ticket).where(Ticket.status == status))
+    return result.scalar_one()
+
+
 async def create_ticket_from_plan(
     session: AsyncSession,
     *,
@@ -37,16 +142,16 @@ async def create_ticket_from_plan(
     rollback_sql: str | None,
     rollback_note: str | None,
     risk_level: str,
-) -> ChangeTicket:
+) -> Ticket:
     for step in proposed_steps:
         _validate_single_statement(step["action_sql"])
     if rollback_sql:
         _validate_single_statement(rollback_sql)
 
-    ticket = ChangeTicket(
-        ticket_id=uuid4(),
+    ticket = Ticket(
+        id=uuid4(),
         alert_id=UUID(str(alert_id)),
-        target_hypothesis_id=target_hypothesis_id,
+        hypothesis_id=target_hypothesis_id,
         proposed_steps=proposed_steps,
         change_reason=change_reason,
         rollback_sql=rollback_sql,
@@ -67,8 +172,8 @@ async def approve_ticket(
     decision: str,
     modified_sql: str | None = None,
     approval_comments: str | None = None,
-) -> ChangeTicket:
-    ticket = await session.get(ChangeTicket, UUID(str(ticket_id)))
+) -> Ticket:
+    ticket = await session.get(Ticket, UUID(str(ticket_id)))
     if ticket is None:
         raise TicketNotFoundError("Ticket not found")
     if ticket.status != TicketStatus.PENDING.value:
@@ -96,8 +201,46 @@ async def approve_ticket(
     return ticket
 
 
+async def update_ticket_plan(
+    session: AsyncSession,
+    *,
+    ticket_id: UUID | str,
+    proposed_steps: list[dict],
+    change_reason: str,
+    rollback_sql: str | None,
+    rollback_note: str | None,
+    human_notes: str | None = None,
+    pre_execution_notes: list[dict] | None = None,
+) -> Ticket:
+    ticket = await session.get(Ticket, UUID(str(ticket_id)))
+    if ticket is None:
+        raise TicketNotFoundError("Ticket not found")
+    if ticket.status != TicketStatus.PENDING.value:
+        raise TicketStateError(f"Expected ticket status PENDING. Current status is {ticket.status}")
+
+    for step in proposed_steps:
+        _validate_single_statement(step["action_sql"])
+    if rollback_sql:
+        _validate_single_statement(rollback_sql)
+
+    ticket.proposed_steps = proposed_steps
+    ticket.change_reason = change_reason
+    ticket.rollback_sql = rollback_sql
+    ticket.rollback_note = rollback_note
+    ticket.metadata_ = {
+        **(ticket.metadata_ or {}),
+        "draft": {
+            "human_notes": human_notes,
+            "pre_execution_notes": pre_execution_notes or [],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }
+    await session.flush()
+    return ticket
+
+
 async def execute_ticket(session: AsyncSession, ticket_id: UUID | str) -> str:
-    ticket = await session.get(ChangeTicket, UUID(str(ticket_id)))
+    ticket = await session.get(Ticket, UUID(str(ticket_id)))
     if ticket is None:
         raise TicketNotFoundError("Ticket not found")
     if ticket.status != TicketStatus.APPROVED.value:
@@ -121,7 +264,7 @@ async def execute_ticket(session: AsyncSession, ticket_id: UUID | str) -> str:
         return TicketStatus.SUCCESS.value
     except Exception as exc:
         await session.rollback()
-        ticket = await session.get(ChangeTicket, UUID(str(ticket_id)))
+        ticket = await session.get(Ticket, UUID(str(ticket_id)))
         if ticket is None:
             raise TicketNotFoundError("Ticket not found") from exc
         ticket.status = TicketStatus.FAILED.value
@@ -138,7 +281,7 @@ async def execute_ticket(session: AsyncSession, ticket_id: UUID | str) -> str:
                 await session.commit()
             except Exception as rollback_exc:
                 await session.rollback()
-                ticket = await session.get(ChangeTicket, UUID(str(ticket_id)))
+                ticket = await session.get(Ticket, UUID(str(ticket_id)))
                 if ticket is not None:
                     ticket.error_message = f"Exec: {exc} | Rollback failed: {rollback_exc}"
                     await session.commit()

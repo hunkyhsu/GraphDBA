@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from graphdba.database.models.hypothesis import HypothesisRecord
 
@@ -53,3 +54,16 @@ async def upsert_hypotheses(
         )
     )
     await session.flush()
+
+
+async def list_hypotheses_for_alert(
+    session: AsyncSession,
+    alert_id: UUID | str,
+) -> list[HypothesisRecord]:
+    stmt = (
+        select(HypothesisRecord)
+        .where(HypothesisRecord.alert_id == UUID(str(alert_id)))
+        .order_by(HypothesisRecord.attempt_count.asc(), HypothesisRecord.created_at.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

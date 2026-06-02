@@ -1,10 +1,12 @@
 from fastapi import APIRouter
 from graphdba.app.api.v1.endpoints import runs
 from graphdba.app.api.v1.endpoints import alerts
+from graphdba.app.api.v1.endpoints import dashboard
 from graphdba.app.api.v1.endpoints import login
 from graphdba.app.api.v1.endpoints import me
 from graphdba.app.api.v1.endpoints import stream_run
 from graphdba.app.api.v1.endpoints import approve_run
+from graphdba.app.api.v1.endpoints import tickets
 
 api_router = APIRouter()
 
@@ -12,6 +14,12 @@ api_router.include_router(
     alerts.router,
     prefix="/alerts",
     tags=["Alerts"]
+)
+
+api_router.include_router(
+    dashboard.router,
+    prefix="/dashboard",
+    tags=["Dashboard"]
 )
 
 api_router.include_router(
@@ -29,6 +37,12 @@ api_router.include_router(
     runs.router,
     prefix="/runs",
     tags=["Get the current agent's state in current thread"]
+)
+
+api_router.include_router(
+    tickets.router,
+    prefix="/tickets",
+    tags=["Tickets"]
 )
 
 api_router.include_router(

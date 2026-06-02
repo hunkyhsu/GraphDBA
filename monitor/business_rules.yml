@@ -1,0 +1,15 @@
+groups:
+  - name: graphdba-smoke
+    rules:
+      - alert: GraphDBASmokeAlwaysFiring
+        expr: vector(1)
+        for: 15s
+        labels:
+          severity: info
+          cluster_name: ClusterA
+          database_name: business_db_a
+          database_role: primary
+          environment: DEV
+        annotations:
+          summary: "GraphDBA smoke alert"
+          description: "Temporary alert to verify Prometheus -> Alertmanager -> GraphDBA."

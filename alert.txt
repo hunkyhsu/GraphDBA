@@ -11,7 +11,7 @@
     "alertname": "PostgreSQLRowLockContention",
     "application_name": "psql",
     "backend_type": "client backend",
-    "datname": "test_db",
+    "datname": "business_db_a",
     "instance": "postgres-exporter:9187",
     "job": "postgres-cluster",
     "server": "host.docker.internal:5432",
@@ -22,7 +22,7 @@
     "wait_event_type": "Lock"
   },
   "commonAnnotations": {
-    "description": "Instance postgres-exporter:9187 in database test_db has active lock blocking. Queries are waiting indefinitely.",
+    "description": "Instance postgres-exporter:9187 in database business_db_a has active lock blocking. Queries are waiting indefinitely.",
     "summary": "Database row-level lock contention detected"
   },
   "externalURL": "http://7c8805b0862b:9093",
@@ -34,7 +34,7 @@
         "alertname": "PostgreSQLRowLockContention",
         "application_name": "psql",
         "backend_type": "client backend",
-        "datname": "test_db",
+        "datname": "business_db_a",
         "instance": "postgres-exporter:9187",
         "job": "postgres-cluster",
         "server": "host.docker.internal:5432",
@@ -45,7 +45,7 @@
         "wait_event_type": "Lock"
       },
       "annotations": {
-        "description": "Instance postgres-exporter:9187 in database test_db has active lock blocking. Queries are waiting indefinitely.",
+        "description": "Instance postgres-exporter:9187 in database business_db_a has active lock blocking. Queries are waiting indefinitely.",
         "summary": "Database row-level lock contention detected"
       },
       "startsAt": "2026-05-18T13:55:01.35Z",

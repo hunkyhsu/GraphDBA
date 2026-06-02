@@ -12,7 +12,6 @@ What you listed — all valid:
   - 
 既然有 Prometheus+alertmanager 这种自动化监测工具，那我的 MCP 工具是不是可以替换为这些，然后让 agent 自行决定去查哪个自动化工具？
 human escalation handler???
-dbmate, SQLAlchemy, SQLModel, Alembic
 --------------------------------------------------------------   
 
 After login, it should have a manage page, in the left shows a side bar which has entries: coming alerts, the agent graph real-time information (which node - doing what - result and so on) and the ticket list(can see the detailed information.). 

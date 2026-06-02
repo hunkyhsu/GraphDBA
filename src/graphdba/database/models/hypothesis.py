@@ -26,7 +26,7 @@ class HypothesisRecord(Base):
     )
     alert_id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("alerts.alert_id", ondelete="CASCADE"),
+        ForeignKey("alerts.id", ondelete="CASCADE"),
         nullable=False,
     )
     attempt_count: Mapped[int] = mapped_column(

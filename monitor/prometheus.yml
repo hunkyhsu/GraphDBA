@@ -10,7 +10,8 @@ alerting:
             - "alertmanager:9093"
 
 rule_files:
-  - "alert_rules.yml"
+  - "business_rules.yml"
+  - "community_rules.yml"
 
 scrape_configs:
   - job_name: 'prometheus'
@@ -20,3 +21,8 @@ scrape_configs:
   - job_name: 'postgres-cluster'
     static_configs:
       - targets: ['postgres-exporter:9187']
+        labels:
+          cluster_name: ClusterA
+          database_role: primary
+          environment: DEV
+          region: local
