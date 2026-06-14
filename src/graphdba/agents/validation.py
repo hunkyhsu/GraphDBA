@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field, field_validator
 from langchain_core.prompts import ChatPromptTemplate
 
-from graphdba.agents.state import Hypothesis, HypothesisStatus, ValidationAction, WorkflowStatus
+from graphdba.agents.state import Hypothesis, HypothesisStatus, ValidationAction, AgentWorkflowStatus
+from graphdba.config.settings import get_settings
 from graphdba.utils.external_call import single_external_call, llm_call_with_retry
 from graphdba.database.repositories import hypotheses
 from graphdba.database.session import AsyncSessionLocal
@@ -29,12 +30,13 @@ class ValidationOutput(BaseModel):
         return v
 
 class ValidationNode:
-    LLM_TIMEOUT_S = 15.0
-    MCP_TIMEOUT_S = 5.0
-    MAX_RETRY = 3
     STRING_CUT = 1000
 
     def __init__(self, llm: BaseChatModel, mcp_client: ClientSession):
+        agent_settings = get_settings().agent
+        self.llm_timeout_s = agent_settings.validation_llm_timeout_s
+        self.mcp_timeout_s = agent_settings.validation_mcp_timeout_s
+        self.max_retry = agent_settings.node_max_retries
         self.mcp_client = mcp_client
         self.llm = llm
         self.structured_llm = self.llm.with_structured_output(ValidationOutput, method="function_calling")
@@ -92,7 +94,7 @@ class ValidationNode:
                         name=action.tool_name,
                         arguments=action.tool_payload
                     ),
-                    timeout=self.MCP_TIMEOUT_S,
+                    timeout=self.mcp_timeout_s,
                     label="Read MCP Tool Call",
                     logger=logger
                 )
@@ -120,14 +122,14 @@ class ValidationNode:
                     "actual": aggregate_output[:self.STRING_CUT],
                     "error_feedback": "",
                 },
-                timeout=self.LLM_TIMEOUT_S,
-                max_retry=self.MAX_RETRY,
+                timeout=self.llm_timeout_s,
+                max_retry=self.max_retry,
                 logger=logger
             )
             if fail_reason:
                 return {
-                    "workflow_status": WorkflowStatus.FAILED.value,
-                    "terminal_message": fail_reason
+                    "workflow_status": AgentWorkflowStatus.FAILED.value,
+                    "failure_reason": fail_reason
                 }              
             hypothesis.status = result.validation_status
             hypothesis.feedback = f"[Actual Output]: {aggregate_output[:self.STRING_CUT]}...\n [Feedback]: {result.reasoning}"
@@ -137,7 +139,7 @@ class ValidationNode:
             else:
                 updated_current.append(hypothesis)
                 logger.info("Current hypothesis is verified")                
-        validation_status: WorkflowStatus = WorkflowStatus.VALIDATED_SUCCESS if len(updated_current) > 0 else WorkflowStatus.VALIDATED_FAIL
+        validation_status: AgentWorkflowStatus = AgentWorkflowStatus.VALIDATED_SUCCESS if len(updated_current) > 0 else AgentWorkflowStatus.VALIDATED_FAIL
         persisted_hypotheses = [*updated_current, *rejected_list]
         try:
             async with AsyncSessionLocal() as session:
@@ -151,8 +153,8 @@ class ValidationNode:
         except Exception as exc:
             logger.exception("Failed to persist hypotheses")
             return {
-                "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": f"Failed to persist hypotheses: {exc}",
+                "workflow_status": AgentWorkflowStatus.FAILED.value,
+                "failure_reason": f"Failed to persist hypotheses: {exc}",
             }
         return {
             "workflow_status": validation_status.value,

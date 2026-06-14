@@ -17,6 +17,11 @@ ACTIVE_STATUSES = (
     AlertStatus.RECEIVED.value,
     AlertStatus.RUNNING.value,
 )
+RECOVERABLE_STATUSES = (
+    AlertStatus.RECEIVED.value,
+    AlertStatus.RUNNING.value,
+    AlertStatus.WAITING_APPROVAL.value,
+)
 TERMINAL_STATUSES = (
     AlertStatus.SOLVED.value,
     AlertStatus.RESOLVED.value,
@@ -89,6 +94,16 @@ async def get_active_alert_by_fingerprint(
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def list_recoverable_alerts(session: AsyncSession) -> list[Alert]:
+    stmt = (
+        select(Alert)
+        .where(Alert.status.in_(RECOVERABLE_STATUSES))
+        .order_by(Alert.updated_at.asc(), Alert.id.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def create_alert(

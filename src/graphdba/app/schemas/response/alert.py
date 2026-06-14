@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class AlertsStateResponse(BaseModel):
     status: str
@@ -10,8 +10,10 @@ class AlertsStateResponse(BaseModel):
 
 
 class AlertListItem(BaseModel):
-    alert_id: UUID
-    alertname: str
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    alert_id: UUID = Field(validation_alias="id")
+    alertname: str = Field(validation_alias="name")
     severity: str
     status: str
     instance: str | None = None
@@ -37,9 +39,11 @@ class AlertStatsResponse(BaseModel):
 
 
 class AlertDetailResponse(BaseModel):
-    alert_id: UUID
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    alert_id: UUID = Field(validation_alias="id")
     fingerprint: str
-    alertname: str
+    alertname: str = Field(validation_alias="name")
     severity: str
     status: str
     instance: str | None = None
@@ -50,7 +54,7 @@ class AlertDetailResponse(BaseModel):
     port: int | None = None
     environment: str | None = None
     region: str | None = None
-    alert_summary: str
+    alert_summary: str = Field(validation_alias="summary")
     description: str | None = None
     labels: dict[str, Any] = Field(default_factory=dict)
     annotations: dict[str, Any] = Field(default_factory=dict)

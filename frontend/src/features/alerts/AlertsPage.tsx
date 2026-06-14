@@ -1,23 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Bell,
-  Bot,
-  BriefcaseBusiness,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Eye,
   Filter,
-  LogOut,
   MoreVertical,
   Search,
   ShieldAlert,
   X,
-  type LucideIcon,
 } from "lucide-react";
 
-import { BrandMark } from "../../components/BrandMark";
 import {
   DEFAULT_ALERT_PAGE_SIZE,
   getAlertDetail,
@@ -31,7 +26,6 @@ import {
 
 type AlertsPageProps = {
   session: LoginResponse;
-  onSignOut: () => void;
 };
 
 const severities = ["All", "Critical", "Warning", "Info"];
@@ -255,7 +249,7 @@ function DetailDrawer({
   );
 }
 
-export function AlertsPage({ session, onSignOut }: AlertsPageProps) {
+export function AlertsPage({ session }: AlertsPageProps) {
   const [stats, setStats] = useState<AlertStatsResponse>({
     active: 0,
     critical: 0,
@@ -345,84 +339,13 @@ export function AlertsPage({ session, onSignOut }: AlertsPageProps) {
     setPage(1);
   }
 
-  const navItems: Array<[string, LucideIcon, boolean]> = [
-    ["Alerts", Bell, true],
-    ["Agent", Bot, false],
-    ["Tickets", BriefcaseBusiness, false],
-  ];
-
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 bg-slate-950 text-white lg:flex lg:flex-col">
-          <div className="flex h-24 items-center gap-3 px-7">
-            <BrandMark />
-            <span className="text-2xl font-semibold">GraphDBA</span>
-          </div>
-          <nav className="flex-1 space-y-2 px-4">
-            {navItems.map(([label, Icon, active]) => (
-              <button
-                key={String(label)}
-                type="button"
-                className={`flex h-14 w-full items-center gap-4 rounded-lg px-5 text-left text-base font-medium transition ${
-                  active ? "bg-indigo-600 text-white shadow-lg shadow-indigo-950/30" : "text-slate-300 hover:bg-white/10"
-                }`}
-              >
-                <Icon size={22} />
-                {label}
-              </button>
-            ))}
-          </nav>
-          <div className="px-7 pb-8">
-            <div className="relative h-40 overflow-hidden rounded-lg border border-indigo-400/20 bg-slate-900">
-              <div className="absolute left-1/2 top-10 h-16 w-24 -translate-x-1/2 rotate-45 border border-indigo-400/35 bg-indigo-500/10" />
-              <div className="absolute left-1/2 top-16 h-16 w-24 -translate-x-1/2 rotate-45 border border-indigo-400/30 bg-indigo-500/20" />
-              <div className="absolute left-1/2 top-[5.5rem] h-16 w-24 -translate-x-1/2 rotate-45 border border-indigo-400/25 bg-indigo-500/15" />
-            </div>
-          </div>
-        </aside>
-
-        <section className="min-w-0 flex-1">
-          <header className="flex h-20 items-center justify-between gap-4 px-5 sm:px-8">
-            <div className="flex items-center gap-3">
-              <div className="lg:hidden">
-                <BrandMark />
-              </div>
-              <h1 className="text-3xl font-semibold tracking-normal text-slate-950">Alerts</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                className="grid h-10 w-10 place-items-center rounded-md text-slate-600 hover:bg-white hover:text-slate-950"
-                aria-label="Notifications"
-              >
-                <Bell size={20} />
-              </button>
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-indigo-600 text-sm font-semibold text-white">
-                  {session.user.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-semibold text-slate-950">{session.user.name}</p>
-                  <p className="text-xs text-slate-500">{session.user.employee_id}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onSignOut}
-                  className="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-white hover:text-slate-950"
-                  aria-label="Sign out"
-                >
-                  <LogOut size={18} />
-                </button>
-              </div>
-            </div>
-          </header>
-
-          <div className="space-y-6 px-5 pb-8 sm:px-8">
+    <>
+      <div className="space-y-6 px-5 pb-8 sm:px-8">
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
               <StatCard label="Active Alerts" value={stats.active} tone="red" icon={<Bell size={26} />} />
               <StatCard label="Critical" value={stats.critical} tone="red" icon={<ShieldAlert size={26} />} />
-              <StatCard label="Pending Review" value={stats.pending_review} tone="blue" icon={<BriefcaseBusiness size={26} />} />
+              <StatCard label="Pending Review" value={stats.pending_review} tone="blue" icon={<CheckCircle2 size={26} />} />
               <StatCard label="Resolved (24h)" value={stats.resolved_24h} tone="green" icon={<CheckCircle2 size={26} />} />
             </div>
 
@@ -599,8 +522,6 @@ export function AlertsPage({ session, onSignOut }: AlertsPageProps) {
                 </div>
               </div>
             </section>
-          </div>
-        </section>
       </div>
 
       {selectedId ? (
@@ -615,6 +536,6 @@ export function AlertsPage({ session, onSignOut }: AlertsPageProps) {
           }}
         />
       ) : null}
-    </main>
+    </>
   );
 }

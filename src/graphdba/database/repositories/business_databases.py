@@ -43,6 +43,37 @@ async def list_active_business_databases(
     return list(result.scalars().all())
 
 
+async def find_business_database_for_alert_target(
+    session: AsyncSession,
+    *,
+    cluster_name: str | None = None,
+    database_name: str | None = None,
+    environment: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> BusinessDatabase | None:
+    stmt = select(BusinessDatabase).where(BusinessDatabase.is_active.is_(True))
+    if cluster_name:
+        stmt = stmt.where(BusinessDatabase.cluster_name == cluster_name)
+    if database_name:
+        stmt = stmt.where(BusinessDatabase.database_name == database_name)
+    if environment:
+        stmt = stmt.where(BusinessDatabase.environment == environment)
+    if host:
+        stmt = stmt.where(BusinessDatabase.host == host)
+    if port:
+        stmt = stmt.where(BusinessDatabase.port == port)
+
+    stmt = stmt.order_by(
+        BusinessDatabase.environment,
+        BusinessDatabase.cluster_name,
+        BusinessDatabase.database_name,
+        BusinessDatabase.id,
+    ).limit(1)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def create_business_database(
     session: AsyncSession,
     *,

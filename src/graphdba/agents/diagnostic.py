@@ -1,14 +1,12 @@
 from __future__ import annotations
-import asyncio
 import logging
-import math
 import json
-from uuid import uuid4
 from typing import List, TYPE_CHECKING
 from pydantic import BaseModel, Field, model_validator
 from langchain_core.prompts import ChatPromptTemplate
 
-from graphdba.agents.state import AlertPayload, Hypothesis, ValidationAction, WorkflowStatus, HypothesisStatus
+from graphdba.agents.state import AlertPayload, Hypothesis, ValidationAction, AgentWorkflowStatus, HypothesisStatus
+from graphdba.config.settings import get_settings
 from graphdba.utils.external_call import single_external_call, llm_call_with_retry
 
 if TYPE_CHECKING:
@@ -38,15 +36,17 @@ class DiagnosticOutput(BaseModel):
         return self
 
 class DiagnosticNode:
-    SEMANTIC_SIMILARITY_THRESHOLD = 0.85
-    LLM_TIMEOUT_S = 50.0
-    EMBEDDING_TIMEOUT_S = 5.0
-    MCP_TIMEOUT_S = 5.0
-    MAX_RETRY = 3
     STRING_CUT = 1000
     SCHEMA_INSTRUCTIONS = json.dumps(DiagnosticOutput.model_json_schema(), indent=2)
 
     def __init__(self, llm: BaseChatModel, mcp_client: ClientSession, embeddings: HuggingFaceEmbeddings | None = None):
+        agent_settings = get_settings().agent
+        self.semantic_similarity_threshold = agent_settings.semantic_similarity_threshold
+        self.llm_timeout_s = agent_settings.diagnostic_llm_timeout_s
+        self.embedding_timeout_s = agent_settings.diagnostic_embedding_timeout_s
+        self.mcp_timeout_s = agent_settings.diagnostic_mcp_timeout_s
+        self.max_retry = agent_settings.node_max_retries
+
         self.llm = llm
         self.structured_llm = self.llm.with_structured_output(DiagnosticOutput, method="json_mode")
         self.mcp_client = mcp_client
@@ -67,8 +67,6 @@ class DiagnosticNode:
             5. **Self-Correction**: If [ERROR FEEDBACK] is present, it means your previous output triggered a system or execution error. Read the error carefully and adjust your next response to resolve it.
             6. Strictly output based on the valid JSON Schema format in [SCHEMA INSTRUCTIONS].
             Rely strictly on factual database mechanics. Do not guess parameters unless implicitly supported by the alert payload.
-
-            
             """
             ),
             ("human", 
@@ -94,20 +92,21 @@ class DiagnosticNode:
             """)
         ])
 
-    async def _are_semantically_similar(self, text1: str, text2: str, threshold: float = SEMANTIC_SIMILARITY_THRESHOLD) -> tuple[bool, str | None]:
+    async def _are_semantically_similar(self, text1: str, text2: str, threshold: float | None = None) -> tuple[bool, str | None]:
         """Embedding-based cosine similarity. Return (is_similar, fail_reason)"""
         if self.embeddings is None:
             return False, "No embedding model is provided"   
         vecs, fail_reason = await single_external_call(
             coro=self.embeddings.aembed_documents([text1, text2]),
-            timeout=self.EMBEDDING_TIMEOUT_S,
+            timeout=self.embedding_timeout_s,
             label="Local Embedding model",
             logger=logger
         )    
         if fail_reason:
             return False, fail_reason
         similarity = sum(x * y for x, y in zip(vecs[0], vecs[1]))
-        return similarity >= threshold, None
+        threshold_value = self.semantic_similarity_threshold if threshold is None else threshold
+        return similarity >= threshold_value, None
 
     @staticmethod
     def _tools_identical(actions1: list[ValidationAction], actions2: list[ValidationAction]) -> bool:
@@ -132,7 +131,7 @@ class DiagnosticNode:
         """Get tools list and format it. Return (result, fail reason)"""
         result, fail_reason = await single_external_call(
             coro=self.mcp_client.list_tools(), 
-            timeout=self.MCP_TIMEOUT_S,
+            timeout=self.mcp_timeout_s,
             label=f"Read MCP server list tools",
             logger=logger
         )
@@ -193,8 +192,8 @@ class DiagnosticNode:
         tools_formatted, tools_error = await self._get_formatted_tools()
         if tools_error:
             return {
-                "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": f"Tools initialization failed: {tools_error}"
+                "workflow_status": AgentWorkflowStatus.FAILED.value,
+                "failure_reason": f"Tools initialization failed: {tools_error}"
             }
         chain: RunnableSequence[dict, DiagnosticOutput] = self.prompt | self.structured_llm
         result, failure = await llm_call_with_retry(
@@ -208,51 +207,50 @@ class DiagnosticNode:
                 "rejected_context": rejected_context,
                 "schema_instructions": self.SCHEMA_INSTRUCTIONS,
             },
-            timeout=self.LLM_TIMEOUT_S,
-            max_retry=self.MAX_RETRY,
+            timeout=self.llm_timeout_s,
+            max_retry=self.max_retry,
             logger=logger
         )
         if failure:
             return {
-                "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": failure
+                "workflow_status": AgentWorkflowStatus.FAILED.value,
+                "failure_reason": failure
             }
         try:
-            # logger.info("Diagnostic LLM output is %s", result.model_dump_json())
             if result.require_human_escalation:
                 logger.warning("Diagnostic escalation required. Reason: %s", result.escalation_reason)
                 return {
-                    "workflow_status": WorkflowStatus.ESCALATED.value,
-                    "terminal_message": f"Human escalation required: {result.escalation_reason}"
+                    "workflow_status": AgentWorkflowStatus.ESCALATED.value,
+                    "failure_reason": f"Human escalation required: {result.escalation_reason}"
                 }
                       
             inter_hypotheses, fail_reason_inter = await self.inter_batch_filter(result.hypotheses, rejected_hypotheses)
             if fail_reason_inter:
                 return {
-                    "workflow_status": WorkflowStatus.FAILED.value,
-                    "terminal_message": "In inter-batch filter: " + fail_reason_inter
+                    "workflow_status": AgentWorkflowStatus.FAILED.value,
+                    "failure_reason": "In inter-batch filter: " + fail_reason_inter
                 }
             intra_hypotheses, fail_reason_intra = await self.intra_batch_filter(inter_hypotheses)
             if fail_reason_intra:
                 return {
-                    "workflow_status": WorkflowStatus.FAILED.value,
-                    "terminal_message": "In intra-batch filter: " + fail_reason_intra
+                    "workflow_status": AgentWorkflowStatus.FAILED.value,
+                    "failure_reason": "In intra-batch filter: " + fail_reason_intra
                 }
             logger.info("Diagnosis completed. Propose %s valid hypotheses", len(intra_hypotheses))
             if len(intra_hypotheses) == 0:
                 logger.error("All generated hypotheses were duplicates of rejected ones. Hypothesis space exhausted")
                 return {
-                    "workflow_status": WorkflowStatus.FAILED.value,
-                    "terminal_message": "All hypotheses are filtered because similar to rejected hypotheses."
+                    "workflow_status": AgentWorkflowStatus.FAILED.value,
+                    "failure_reason": "All hypotheses are filtered because similar to rejected hypotheses."
                 }
             return {
-                "workflow_status": WorkflowStatus.DIAGNOSED.value,
+                "workflow_status": AgentWorkflowStatus.DIAGNOSED.value,
                 "current_hypotheses": [h.model_dump(mode="json") for h in intra_hypotheses],
                 "attempt_count": state.get("attempt_count", 0) + 1
             }
         except Exception as e:
             logger.exception("Unexpected error during diagnostic node execution")
             return {
-                "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": f"Diagnostic logic failure: {type(e).__name__}"
+                "workflow_status": AgentWorkflowStatus.FAILED.value,
+                "failure_reason": f"Diagnostic logic failure: {type(e).__name__}"
             }

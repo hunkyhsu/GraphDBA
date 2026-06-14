@@ -5,7 +5,6 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./business_rules.yml:/etc/prometheus/business_rules.yml
-      - ./community_rules.yml:/etc/prometheus/community_rules.yml
     ports:
       - "9090:9090"
     command:
@@ -25,6 +24,7 @@ services:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: gdb-postgres-exporter
     environment:
-      DATA_SOURCE_NAME: "postgresql://agent:password@host.docker.internal:5432/metadata?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://agent:password@host.docker.internal:5432/business_db_b?sslmode=disable"
+      # DATA_SOURCE_NAME: "postgresql://agent:password@host.docker.internal:5432/metadata?sslmode=disable"
     ports:
       - "9187:9187"

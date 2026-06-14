@@ -1,7 +1,7 @@
-import operator
 from enum import StrEnum
 from uuid import uuid4
-from typing import Annotated, Literal, TypedDict, List, Any
+from typing import Annotated, Any, TypedDict
+import operator
 from pydantic import BaseModel, Field
 
 # Data Model(Schema)
@@ -29,7 +29,6 @@ class Hypothesis(BaseModel):
     """Schema of hypothesis for diagnostic node"""
     id: str = Field(default_factory=lambda: f"HYP_{uuid4().hex[:8].upper()}", description="Unique identity of a hypothesis")
     root_cause: str = Field(description="1 sentence description of a hypothesis about the root cause")
-    # description: list[str] = Field(description="Detail description of a hypothesis")
     confidence_score: float = Field(ge=0.0, le=1.0, description="Confidence score for a hypothesis by AI")
     validation_actions: list[ValidationAction] = Field(description="SQL used to validate a hypothesis")
     expected_result: str = Field(description="Expected result when execute the validation SQL to prove a hypothesis")
@@ -45,7 +44,6 @@ class Feedback(BaseModel):
 
 class PlanStep(BaseModel):
     step_order: int = Field(description="Step order")
-    # step_name: str = Field(description="Step name")
     action_sql: str = Field(description="Exact action SQL")
 
 class PlanRiskLevel(StrEnum):
@@ -58,44 +56,30 @@ class FinalPlan(BaseModel):
     """Schema of final execution plan for planning node"""
     target_alert_id: str = Field(description="Unique identity of a alert need to execute")
     target_hypothesis_id: str = Field(description="Unique identity of a validated hypothesis")
-    # fix_summary: str = Field(description="Summary of the fix plan")
     change_reason: str = Field(description="Detail of the change reason, as the description of ticket")
     risk_level: PlanRiskLevel = Field(description="Severity level of the fix plan")
     execution_steps: list[PlanStep] = Field(description="Execution plan steps")
     rollback_sql: str | None = Field(default=None, description="Rollback SQL")
     rollback_note: str | None = Field(default=None, description="Explain why rollback SQL is not applicable")
 
-class WorkflowStatus(StrEnum):
-    TRIAGED = "triaged"
+class AgentWorkflowStatus(StrEnum):
     DIAGNOSED = "diagnosed"
     VALIDATED_SUCCESS = "validated_success"
     VALIDATED_FAIL = "validated_fail"
     PLANNED = "planned"
-    PROPOSED = "proposed"
-    COMPLETED = "completed"
     FAILED = "failed"
     ESCALATED = "escalated"
 
-class ApprovalDecision(StrEnum):
-    APPROVED = "approved"
-    REJECTED = "rejected"
-
 # Global State
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     """The shared memory for Multi-Agent State Machine"""
     alert: dict
-    # Hypothesis in current loop, can be replace next loop
     current_hypotheses: list[dict]
-    # Rejected hypothesis used for retry, should append only during the loop
     rejected_hypotheses: Annotated[list[dict], operator.add]
     final_plan: dict | None
-    ticket_id: str | None
     attempt_count: int
-    workflow_status: str
-    approval_decision: str | None
-    # Feedback of human DBA when approval decision = rejected or modified
-    human_feedback: str | None
-    terminal_message: str | None
+    workflow_status: str | None
+    failure_reason: str | None
 
 class AgentStateUpdate(AgentState, total=False): 
     """Partial update for AgentState""" 
@@ -107,12 +91,9 @@ class AgentStateValues(BaseModel):
     current_hypotheses: list[Hypothesis]
     rejected_hypotheses: list[Hypothesis]
     final_plan: FinalPlan | None = None
-    ticket_id: str | None = None
-    attempt_count: int
-    workflow_status: str
-    approval_decision: str | None = None
-    human_feedback: str | None = None
-    terminal_message: str | None = None
+    attempt_count: int = 0
+    workflow_status: str | None = None
+    failure_reason: str | None = None
 
 class NodeName(StrEnum):
     DIAGNOSTIC = "diagnostic_node"

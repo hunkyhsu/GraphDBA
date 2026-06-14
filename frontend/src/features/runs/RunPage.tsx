@@ -2,21 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock, Radio, RefreshCw, XCircle } from "lucide-react";
 
 import { approveRun, getRun, type LoginResponse, type RunStateResponse } from "../../lib/api";
-import { shortId, titleCase } from "../../lib/format";
+import { titleCase } from "../../lib/format";
 
 type RunPageProps = {
   session: LoginResponse;
   runId: string;
-  onOpenTicket: (ticketId: string) => void;
 };
 
 const stages = [
-  { key: "triaged", label: "Triage" },
   { key: "diagnosed", label: "Diagnostic" },
   { key: "validated_success", label: "Validation" },
   { key: "planned", label: "Planning" },
-  { key: "proposed", label: "Proposing" },
-  { key: "completed", label: "Execution" },
 ];
 
 function CodeBlock({ value }: { value: string }) {
@@ -27,7 +23,7 @@ function CodeBlock({ value }: { value: string }) {
   );
 }
 
-export function RunPage({ session, runId, onOpenTicket }: RunPageProps) {
+export function RunPage({ session, runId }: RunPageProps) {
   const [run, setRun] = useState<RunStateResponse | null>(null);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
@@ -48,13 +44,12 @@ export function RunPage({ session, runId, onOpenTicket }: RunPageProps) {
 
   const currentIndex = useMemo(() => {
     const status = run?.values.workflow_status;
-    return Math.max(0, stages.findIndex((stage) => stage.key === status));
+    return stages.findIndex((stage) => stage.key === status);
   }, [run]);
 
   const alert = run?.values.alert;
   const plan = run?.values.final_plan;
-  const ticketId = run?.values.ticket_id;
-  const isWaitingApproval = run?.values.workflow_status === "proposed" && Boolean(ticketId);
+  const isWaitingApproval = run?.values.workflow_status === "planned";
 
   async function submitDecision(decision: "approved" | "rejected") {
     setIsSubmitting(true);
@@ -79,8 +74,8 @@ export function RunPage({ session, runId, onOpenTicket }: RunPageProps) {
         <h2 className="text-lg font-semibold text-slate-950">Workflow Timeline</h2>
         <div className="mt-6 space-y-5">
           {stages.map((stage, index) => {
-            const isDone = index < currentIndex || run?.values.workflow_status === "completed";
-            const isCurrent = index === currentIndex && run?.values.workflow_status !== "completed";
+            const isDone = currentIndex > -1 && index < currentIndex;
+            const isCurrent = index === currentIndex;
             return (
               <div key={stage.key} className="flex gap-4">
                 <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold ${
@@ -121,7 +116,7 @@ export function RunPage({ session, runId, onOpenTicket }: RunPageProps) {
                   <div><dt className="text-slate-500">Alert</dt><dd className="font-semibold text-slate-900">{alert?.alertname ?? alert?.name ?? "-"}</dd></div>
                   <div><dt className="text-slate-500">Instance</dt><dd className="font-semibold text-slate-900">{alert?.instance ?? "-"}</dd></div>
                   <div><dt className="text-slate-500">Status</dt><dd className="font-semibold text-slate-900">{titleCase(run?.values.workflow_status)}</dd></div>
-                  <div><dt className="text-slate-500">Ticket</dt><dd className="font-semibold text-slate-900">{shortId(ticketId)}</dd></div>
+                  <div><dt className="text-slate-500">Attempt</dt><dd className="font-semibold text-slate-900">{run?.values.attempt_count ?? 0}</dd></div>
                 </dl>
               </div>
 
@@ -129,11 +124,6 @@ export function RunPage({ session, runId, onOpenTicket }: RunPageProps) {
                 <div>
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-slate-950">Plan</h2>
-                    {ticketId ? (
-                      <button type="button" onClick={() => onOpenTicket(ticketId)} className="h-9 rounded-md border border-indigo-500 px-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50">
-                        Edit Plan
-                      </button>
-                    ) : null}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-600">{plan.change_reason}</p>
                   <div className="mt-4 space-y-3">
@@ -186,6 +176,7 @@ export function RunPage({ session, runId, onOpenTicket }: RunPageProps) {
             className="mt-3 min-h-36 w-full rounded-md border border-slate-300 p-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
           />
           {actionError ? <p className="mt-2 text-sm text-red-600">{actionError}</p> : null}
+          {run?.values.failure_reason ? <p className="mt-2 text-sm text-red-600">{run.values.failure_reason}</p> : null}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <button
               type="button"

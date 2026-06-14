@@ -1,15 +1,191 @@
 groups:
-  - name: graphdba-smoke
+  - name: graphdba-postgresql
     rules:
-      - alert: GraphDBASmokeAlwaysFiring
-        expr: vector(1)
-        for: 15s
+      - alert: PostgreSQLInstanceDown
+        expr: pg_up == 0
+        for: 1m
         labels:
-          severity: info
-          cluster_name: ClusterA
-          database_name: business_db_a
-          database_role: primary
-          environment: DEV
+          severity: critical
+          graphdba_route: dba
         annotations:
-          summary: "GraphDBA smoke alert"
-          description: "Temporary alert to verify Prometheus -> Alertmanager -> GraphDBA."
+          summary: "PostgreSQL instance is down"
+          description: "PostgreSQL exporter reports pg_up=0 for instance {{ $labels.instance }}."
+
+      - alert: PostgreSQLConnectionsHigh
+        expr: |
+          (
+            sum by (cluster_name, database_role, environment, region, instance) (pg_stat_activity_count)
+            /
+            max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_connections)
+          ) > 0.80
+          and
+          max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_connections) > 0
+        for: 5m
+        labels:
+          severity: warning
+          graphdba_route: dba
+        annotations:
+          summary: "PostgreSQL connection usage is high"
+          description: "PostgreSQL connection usage is above 80% on instance {{ $labels.instance }}."
+
+      - alert: PostgreSQLConnectionsExhausted
+        expr: |
+          (
+            sum by (cluster_name, database_role, environment, region, instance) (pg_stat_activity_count)
+            /
+            max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_connections)
+          ) > 0.95
+          and
+          max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_connections) > 0
+        for: 2m
+        labels:
+          severity: critical
+          graphdba_route: dba
+        annotations:
+          summary: "PostgreSQL connections are nearly exhausted"
+          description: "PostgreSQL connection usage is above 95% on instance {{ $labels.instance }}."
+
+      - alert: PostgreSQLDeadlocksDetected
+        expr: |
+          sum by (cluster_name, database_role, environment, region, instance, datname) (
+            increase(pg_stat_database_deadlocks{datname!~"template.*|postgres", datid!="0"}[5m])
+          ) > 0
+        labels:
+          severity: critical
+          graphdba_route: dba
+          database_name: "{{ $labels.datname }}"
+        annotations:
+          summary: "PostgreSQL deadlocks detected"
+          description: "Database {{ $labels.datname }} on {{ $labels.instance }} had {{ $value }} deadlocks in the last 5 minutes."
+
+      - alert: PostgreSQLRollbackRateHigh
+        expr: |
+          (
+            sum by (cluster_name, database_role, environment, region, instance, datname) (
+              rate(pg_stat_database_xact_rollback{datname!~"template.*|postgres", datid!="0"}[5m])
+            )
+            /
+            (
+              sum by (cluster_name, database_role, environment, region, instance, datname) (
+                rate(pg_stat_database_xact_rollback{datname!~"template.*|postgres", datid!="0"}[5m])
+              )
+              +
+              sum by (cluster_name, database_role, environment, region, instance, datname) (
+                rate(pg_stat_database_xact_commit{datname!~"template.*|postgres", datid!="0"}[5m])
+              )
+            )
+          ) > 0.02
+          and
+          (
+            sum by (cluster_name, database_role, environment, region, instance, datname) (
+              rate(pg_stat_database_xact_rollback{datname!~"template.*|postgres", datid!="0"}[5m])
+            )
+            +
+            sum by (cluster_name, database_role, environment, region, instance, datname) (
+              rate(pg_stat_database_xact_commit{datname!~"template.*|postgres", datid!="0"}[5m])
+            )
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          graphdba_route: dba
+          database_name: "{{ $labels.datname }}"
+        annotations:
+          summary: "PostgreSQL rollback rate is high"
+          description: "More than 2% of transactions are rolling back for database {{ $labels.datname }} on {{ $labels.instance }}."
+
+      - alert: PostgreSQLTableNotAutovacuumed
+        expr: |
+          (
+            (pg_stat_user_tables_n_tup_del + pg_stat_user_tables_n_tup_upd + pg_stat_user_tables_n_tup_hot_upd)
+            > on (cluster_name, database_role, environment, region, instance) group_left
+              pg_settings_autovacuum_vacuum_threshold
+          )
+          and
+          (time() - pg_stat_user_tables_last_autovacuum) > 60 * 60 * 24 * 10
+          and
+          (pg_stat_user_tables_n_live_tup + pg_stat_user_tables_n_dead_tup) > 1000
+        for: 30m
+        labels:
+          severity: warning
+          graphdba_route: dba
+          database_name: "{{ $labels.datname }}"
+        annotations:
+          summary: "PostgreSQL table has not been autovacuumed"
+          description: "Table {{ $labels.relname }} in database {{ $labels.datname }} on {{ $labels.instance }} has not been autovacuumed for more than 10 days."
+
+      - alert: PostgreSQLTableNotAutoanalyzed
+        expr: |
+          (
+            (pg_stat_user_tables_n_tup_del + pg_stat_user_tables_n_tup_upd + pg_stat_user_tables_n_tup_hot_upd)
+            > on (cluster_name, database_role, environment, region, instance) group_left
+              pg_settings_autovacuum_analyze_threshold
+          )
+          and
+          (time() - pg_stat_user_tables_last_autoanalyze) > 60 * 60 * 24 * 10
+          and
+          (pg_stat_user_tables_n_live_tup + pg_stat_user_tables_n_dead_tup) > 1000
+        for: 30m
+        labels:
+          severity: warning
+          graphdba_route: dba
+          database_name: "{{ $labels.datname }}"
+        annotations:
+          summary: "PostgreSQL table has not been autoanalyzed"
+          description: "Table {{ $labels.relname }} in database {{ $labels.datname }} on {{ $labels.instance }} has not been autoanalyzed for more than 10 days."
+
+      - alert: PostgreSQLDeadTuplesHigh
+        expr: |
+          (
+            pg_stat_user_tables_n_dead_tup
+            /
+            (pg_stat_user_tables_n_live_tup + pg_stat_user_tables_n_dead_tup)
+          ) >= 0.10
+          and
+          pg_stat_user_tables_n_dead_tup > 10000
+          and
+          (pg_stat_user_tables_n_live_tup + pg_stat_user_tables_n_dead_tup) > 0
+        for: 15m
+        labels:
+          severity: warning
+          graphdba_route: dba
+          database_name: "{{ $labels.datname }}"
+        annotations:
+          summary: "PostgreSQL table has high dead tuple pressure"
+          description: "Table {{ $labels.relname }} in database {{ $labels.datname }} on {{ $labels.instance }} has at least 10% dead tuples and more than 10000 dead tuples."
+
+      - alert: PostgreSQLLocksHigh
+        expr: |
+          (
+            sum by (cluster_name, database_role, environment, region, instance) (pg_locks_count)
+            /
+            (
+              max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_locks_per_transaction)
+              *
+              max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_connections)
+            )
+          ) > 0.20
+          and
+          (
+            max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_locks_per_transaction)
+            *
+            max by (cluster_name, database_role, environment, region, instance) (pg_settings_max_connections)
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          graphdba_route: dba
+        annotations:
+          summary: "PostgreSQL lock usage is high"
+          description: "PostgreSQL lock usage is above 20% of configured capacity on instance {{ $labels.instance }}."
+
+      - alert: PostgreSQLReplicationLagHigh
+        expr: |
+          pg_replication_lag_seconds{database_role=~"replica|standby"} > 5
+        for: 2m
+        labels:
+          severity: warning
+          graphdba_route: dba
+        annotations:
+          summary: "PostgreSQL replication lag is high"
+          description: "Replica {{ $labels.instance }} has replication lag above 5 seconds."

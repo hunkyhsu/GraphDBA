@@ -1,4 +1,5 @@
 from . import (
+    alert_policies,
     alerts,
     business_databases,
     hypotheses,
@@ -10,6 +11,7 @@ from . import (
 )
 
 __all__ = [
+    "alert_policies",
     "alerts",
     "business_databases",
     "hypotheses",

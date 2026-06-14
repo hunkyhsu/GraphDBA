@@ -35,10 +35,6 @@ export function App() {
   }
 
   if (session) {
-    if (view === "alerts") {
-      return <AlertsPage session={session} onSignOut={handleSignOut} />;
-    }
-
     const title = selectedTicketId
       ? isEditingTicket
         ? "Modify Execution Plan"
@@ -47,6 +43,8 @@ export function App() {
         ? `Run ${shortId(selectedRunId)}`
         : view === "tickets"
           ? "Tickets"
+          : view === "alerts"
+            ? "Alerts"
           : view === "runs" || view === "agent"
             ? "Agent Runs"
             : "Dashboard";
@@ -87,6 +85,8 @@ export function App() {
             onShowTickets={() => navigate("tickets")}
             onShowAlerts={() => navigate("alerts")}
           />
+        ) : view === "alerts" ? (
+          <AlertsPage session={session} />
         ) : view === "tickets" && selectedTicketId ? (
           <TicketPage
             session={session}
@@ -113,11 +113,6 @@ export function App() {
           <RunPage
             session={session}
             runId={selectedRunId}
-            onOpenTicket={(ticketId) => {
-              setSelectedTicketId(ticketId);
-              setIsEditingTicket(false);
-              setView("tickets");
-            }}
           />
         ) : (
           <div className="px-5 pb-8 sm:px-8">

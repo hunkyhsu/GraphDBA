@@ -1,5 +1,5 @@
 global:
-  resolve_timeout: 5m
+  resolve_timeout: 1m
 
 route:
   group_by: ['alertname', 'instance']
@@ -11,6 +11,6 @@ route:
 receivers:
   - name: 'fastapi-webhook'
     webhook_configs:
-      # host.docker.internal 映射到你的 MacBook 宿主机，端口匹配你的 FastAPI 端口
-      - url: 'http://host.docker.internal:8000/api/v1/alerts'
+      - url: 'http://host.docker.internal:9000/alerts'
+      # - url: 'http://host.docker.internal:8000/api/v1/alerts'
         send_resolved: true  # 告警恢复时也发送 Webhook 通知

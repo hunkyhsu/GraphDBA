@@ -55,103 +55,111 @@ AGENT__MAX_RETRIES=5
 
 ### Runtime Entry Points
 
-- `src/graphdba/app/app.py` creates the FastAPI app and, during lifespan startup, opens read/write MCP stdio clients, creates the embedding model, creates DeepSeek LLMs, builds the LangGraph, and stores these in `app.state`.
-- `POST /api/v1/alerts` accepts Alertmanager webhook payloads and starts a background graph run for each firing alert. The LangGraph `thread_id` is the alert fingerprint.
-- `GET /api/v1/runs/{run_id}` returns current graph state and `next` nodes.
+- `src/graphdba/app/app.py` creates the FastAPI app and registers an `AgentContainer` during lifespan startup.
+- `src/graphdba/agents/container.py` lazily initializes expensive graph dependencies on first graph access: read MCP stdio client, embedding model, DeepSeek LLMs, `AsyncPostgresSaver`, and the compiled LangGraph.
+- API modules live directly under `src/graphdba/app/api/v1/`; service-layer logic for alert ingestion lives under `src/graphdba/app/api/v1/services/`.
+- `POST /api/v1/alerts` accepts Alertmanager webhook payloads, persists or reuses active alerts, applies deterministic alert policy, and schedules graph work only when the policy action is `START_AGENT`.
+- Startup recovery runs from `src/graphdba/app/services/recovery.py` in a background task and scans recoverable DB alerts.
+- The LangGraph `thread_id` is the persisted alert UUID string, also used as the frontend `run_id`.
+- `GET /api/v1/runs/{run_id}` returns graph state and `next` nodes for graph-backed runs.
 - `GET /api/v1/runs/{run_id}/stream` streams LangGraph events with SSE.
-- `POST /api/v1/runs/{run_id}/approve` calls write MCP `approve_ticket`, updates graph state with approval fields, then resumes the graph.
+- `POST /api/v1/runs/{run_id}/approve` approves or rejects the pending database ticket and executes approved SQL through repositories. It does not resume LangGraph.
+
+### Status Boundaries
+
+Keep these status concepts separate. Do not collapse them into one enum.
+
+- `AlertStatus` in `src/graphdba/database/models/alert.py` is persistent business lifecycle: `RECEIVED`, `RUNNING`, `WAITING_APPROVAL`, `SOLVED`, `RESOLVED`, `ESCALATED`, `FAILED`.
+- `AgentWorkflowStatus` in `src/graphdba/agents/state.py` is graph-internal routing/result state: `DIAGNOSED`, `VALIDATED_SUCCESS`, `VALIDATED_FAIL`, `PLANNED`, `FAILED`, `ESCALATED`.
+- `AlertPolicyAction` in `src/graphdba/app/api/v1/services/alerts.py` is an application orchestration decision: `START_AGENT`, `FAST_PATH_SOLVED`, `ESCALATE`.
+- `TicketStatus` in `src/graphdba/database/models/ticket.py` is the change-ticket lifecycle: `PENDING`, `APPROVED`, `REJECTED`, `EXECUTING`, `SUCCESS`, `FAILED`, `ROLLED_BACK`.
+- `RunLeaseStatus` in `src/graphdba/database/models/run_lease.py` represents worker ownership of graph/ticket-proposal work: `RUNNING`, `RELEASED`.
+
+The application layer maps between these concepts. The graph should not own database alert lifecycle, the API policy should not return graph workflow statuses, and `AlertStatus.RUNNING` must not be treated as proof that a worker is alive; use run leases for liveness/ownership.
+
+### Alert Ingestion
+
+`src/graphdba/app/api/v1/alerts.py` is route-only and delegates webhook processing to `ingest_firing_alerts()`.
+
+`src/graphdba/app/api/v1/services/alerts.py` owns webhook ingestion:
+
+- It ignores non-firing Alertmanager items.
+- It creates new alert rows for new active fingerprints.
+- It treats repeated active fingerprints as duplicates and delegates checkpoint/lease-aware handling to recovery.
+
+`src/graphdba/app/api/v1/services/policy.py` owns deterministic alert policy:
+
+- `apply_alert_policy()` handles deterministic non-graph decisions. Scriptable fast-path alerts become `SOLVED`; physical/storage/network-style errors become `ESCALATED`; normal alerts become `RUNNING` and receive a graph run.
+
+`src/graphdba/app/services/recovery.py` owns graph execution and recovery:
+
+- `build_agent_state()` creates the initial LangGraph state with alert payload, empty hypothesis lists, no final plan, attempt count `0`, and optional `failure_reason`. It does not seed `workflow_status`.
+- `run_graph_with_lease()` acquires a `run_leases` row, streams or resumes the graph, heartbeats the lease, proposes tickets after planning, syncs terminal graph failures/escalations to alert status, and releases the lease.
+- `recover_alert_from_record()` decides whether to skip an active lease, resume a checkpoint, restart from alert data, propose a ticket for a planned checkpoint, sync terminal graph state, or leave `WAITING_APPROVAL` alone.
+- `recover_active_alerts()` scans DB alerts with `RECEIVED`, `RUNNING`, or `WAITING_APPROVAL` status during startup recovery.
+- `propose_ticket_if_planned()` turns a graph `PLANNED` result into a pending ticket and moves the alert to `WAITING_APPROVAL`. Ticket proposal is idempotent for an alert that already has a pending ticket.
 
 ### Agent Graph (`src/graphdba/agents/`)
 
-`src/graphdba/agents/graph.py` builds a LangGraph `StateGraph` with `MemorySaver` checkpointing.
+`src/graphdba/agents/graph.py` builds a LangGraph `StateGraph` and receives its checkpointer from runtime. Production runtime uses `AsyncPostgresSaver`; tests may pass `MemorySaver`.
 
 Current node order:
 
 ```text
 START
-  -> triage_node
   -> diagnostic_node
   -> validation_node
        -> diagnostic_node retry loop on validation failure
   -> planning_node
-  -> proposing_node
-  -> [INTERRUPT before execution_node]
-  -> execution_node
   -> END
 ```
 
-Routing is driven by `WorkflowStatus` from `src/graphdba/agents/state.py`:
+Routing is driven only by `AgentWorkflowStatus`:
 
-- Triage: `TRIAGED` -> Diagnostic; anything else -> END.
 - Diagnostic: `DIAGNOSED` -> Validation; anything else -> END.
 - Validation: `VALIDATED_SUCCESS` -> Planning; `VALIDATED_FAIL` -> Diagnostic while `attempt_count < get_settings().agent.max_retries`, otherwise END.
-- Planning: `PLANNED` -> Proposing; anything else -> END.
-- Proposing: `PROPOSED` -> Execution; anything else -> END.
-- Execution always edges to END.
+- Planning always edges to END after producing `PLANNED`, `ESCALATED`, or `FAILED`.
 
-Human-in-the-loop is implemented with `interrupt_before=[NodeName.EXECUTION]`. Before resume, callers should inspect `final_plan` and `ticket_id`, then inject:
-
-```python
-graph.update_state(config, {
-    "approval_decision": ApprovalDecision.APPROVED,  # or REJECTED
-    "human_feedback": "...",
-})
-```
-
-Then resume with `graph.astream(None, config)`.
+There are no graph triage, proposing, execution, interrupt, approval, or human-feedback nodes. Those system/application operations belong to FastAPI services and repositories.
 
 ### Node Responsibilities
 
-- `triage_node`: pure deterministic function. Validates `AlertPayload`, escalates critical physical/storage/network errors, and initializes mutable state for normal alerts.
 - `DiagnosticNode`: LLM reasoning node using read MCP tools and optional HuggingFace embeddings. It lists available read tools at runtime, asks for 1-3 hypotheses, filters duplicate hypotheses, and increments `attempt_count`.
-- `ValidationNode`: executes each hypothesis' read MCP validation actions, aggregates tool output, and uses chat LLM structured output to mark each hypothesis `verified`, `rejected`, or `inconclusive`.
+- `ValidationNode`: executes each hypothesis' read MCP validation actions, aggregates tool output, uses chat LLM structured output to mark each hypothesis `verified`, `rejected`, or `inconclusive`, and persists hypothesis evidence.
 - `PlanningNode`: uses reasoning LLM to convert verified hypotheses into a conservative `FinalPlan`; requires execution steps and exactly one of `rollback_sql` or `rollback_note`.
-- `ProposingNode`: calls write MCP `propose_ticket` to stage the plan in `change_tickets`; stores returned `ticket_id`; never executes SQL.
-- `ExecutionNode`: if rejected by the human, terminates as `COMPLETED` with a failure reason. If approved, calls write MCP `execute_ticket` using `ticket_id`.
 
 ### State Models
 
-`src/graphdba/agents/state.py` is the canonical schema source.
+`src/graphdba/agents/state.py` is the canonical schema source for graph state.
 
-- `AlertPayload` uses Alertmanager-style aliases: `fingerprint`, `alertname`, and `startsAt`.
-- `AgentState` is the LangGraph shared `TypedDict`; nodes return partial `AgentStateUpdate`.
+- `AlertPayload` uses Alertmanager-style alias `alertname` and requires the persisted alert `id`.
+- `AgentState` is a `TypedDict(total=False)` so initial state does not need graph-only fields before the first node runs.
 - `rejected_hypotheses` is `Annotated[list[dict], operator.add]`, so it appends across retry cycles.
 - `current_hypotheses` is replaced each diagnostic cycle and reduced to verified hypotheses after validation.
-- `WorkflowStatus` includes `TRIAGED`, `DIAGNOSED`, `VALIDATED_SUCCESS`, `VALIDATED_FAIL`, `PLANNED`, `PROPOSED`, `EXECUTED`, `COMPLETED`, `FAILED`, and `ESCALATED`. There is currently no `PENDING` value.
-- `NodeName` includes `TRIAGE`, `DIAGNOSTIC`, `VALIDATION`, `PLANNING`, `PROPOSING`, and `EXECUTION`.
+- `workflow_status` is optional until a graph node emits one.
+- `failure_reason` is the terminal or diagnostic failure explanation. Do not reintroduce `terminal_message`.
+- Removed graph fields: `ticket_id`, `approval_decision`, and `human_feedback`.
+- `NodeName` includes only `DIAGNOSTIC`, `VALIDATION`, and `PLANNING`.
 
 ### Diagnostic Design Details
 
 - `DiagnosticNode` calls `mcp_client.list_tools()` at runtime and injects tool names, descriptions, and input schemas into the prompt.
 - Structured output uses `DiagnosticOutput` with `require_human_escalation`, optional `escalation_reason`, and optional hypotheses.
 - Hypotheses must include non-empty `validation_actions`.
-- Deduplication is embedding-based cosine similarity via `HuggingFaceEmbeddings.aembed_documents`; embeddings are normalized in `src/graphdba/config/dependencies.py`.
+- Deduplication is embedding-based cosine similarity via `HuggingFaceEmbeddings.aembed_documents`; embeddings are normalized in dependency setup.
 - Similarity threshold is `0.85`.
 - Similar `REJECTED` hypotheses are blocked on retry.
 - Similar `INCONCLUSIVE` hypotheses are blocked only when the proposed validation actions are identical.
-- LLM calls use `llm_call_with_retry`; MCP and embedding calls use `single_external_call`.
+- LLM, MCP, and embedding calls are timeout/retry wrapped.
 
-### MCP Servers
+### MCP and Repositories
 
-There are two FastMCP servers launched through stdio by `src/graphdba/config/dependencies.py`.
-
-Read server: `graphdba.mcp.server_read`
-
-- `explain_query`
-- `execute_safe_select`
-- `get_pg_stat_statements`
-- `get_blocking_locks`
-
-Write server: `graphdba.mcp.server_write`
-
-- `create_alert`
-- `get_alert`
-- `update_alert_status`
-- `propose_ticket`
-- `approve_ticket`
-- `execute_ticket`
-
-`src/graphdba/database/connection_pool.py` creates an asyncpg pool and initializes the `change_tickets` table for the write server. `ReadEnforcer` blocks non-read queries using regex validation and applies row limits. `WriteEnforcer` verifies JWT identity for approval and validates SQL syntax via PostgreSQL `PREPARE`.
+- The graph runtime currently opens the read MCP client only.
+- Read MCP tools used by the graph include `explain_query`, `execute_safe_select`, `get_pg_stat_statements`, and `get_blocking_locks`.
+- Write MCP server code may still exist, but current API approval and ticket execution flows use SQLAlchemy repositories directly.
+- `src/graphdba/database/repositories/alerts.py` owns alert persistence, duplicate active-fingerprint lookup, dashboard stats, and status updates.
+- `src/graphdba/database/repositories/run_leases.py` owns acquisition, heartbeat, and release of per-alert graph work leases.
+- `src/graphdba/database/repositories/tickets.py` owns ticket proposal, draft updates, approval/rejection, execution, rollback attempt handling, and list/detail queries.
 
 ### LLM and Embedding Configuration
 
@@ -162,7 +170,14 @@ Write server: `graphdba.mcp.server_write`
 - `get_embedding()`: cached `HuggingFaceEmbeddings`, default `BAAI/bge-small-en-v1.5`, normalized embeddings.
 - `get_mcp_client(is_read: bool)`: async context manager for stdio MCP sessions.
 
-`src/graphdba/app/app.py` sets `HF_HUB_OFFLINE=1`, so the embedding model must already be available locally in runtime environments that start the app.
+`src/graphdba/config/dependencies.py` creates the embedding model lazily through `get_embedding()`. If deployments require offline HuggingFace behavior, configure that explicitly in the runtime environment.
+
+## Frontend Notes
+
+- Frontend code lives under `frontend/`.
+- Keep the existing application style: dense dashboard/tool UI, restrained cards, left sidebar navigation, and `lucide-react` icons.
+- The run page should show the current graph stages only: Diagnostic, Validation, Planning. Triage, approval, and execution are application/database phases, not graph stages.
+- Approval buttons call `POST /api/v1/runs/{run_id}/approve`; they should be enabled only when the alert/ticket flow is waiting for approval.
 
 ## Mock Testing (`tests/`)
 
@@ -172,6 +187,7 @@ Fixture shape:
 
 ```yaml
 alert_payload:
+  id: "..."
   fingerprint: "..."
   alertname: "..."
   instance: "..."
@@ -198,8 +214,6 @@ Current mock behavior:
 
 Known alignment issues to fix before trusting integration coverage:
 
-- `ManagedMockClient.call_tool()` returns a plain string, while production MCP `call_tool()` returns an object with `isError` and `content`. Current agent nodes expect the production shape.
-- `tests/integration/test_workflow.py` is stale against source: it references `WorkflowStatus.PENDING`, calls `build_graph()` without the required `embedding` argument, and expects pre-proposing interrupt state as `PLANNED` even though the graph now goes through `proposing_node` before interrupting before execution.
-- Some unit tests construct `Hypothesis` with a removed `description` field and assert failure messages that no longer match current source.
-
-When updating tests, align mocks to current MCP response contracts and current graph signature before adding new assertions.
+- `ManagedMockClient.call_tool()` returns a plain string, while production MCP `call_tool()` returns an object with `isError` and `content`. Current validation code expects the production shape.
+- Integration tests that exercise the full graph require LLM credentials and should not be run unless explicitly allowed by the user.
+- When updating tests, align mocks to current MCP response contracts, current `build_graph()` signature, and the current graph order without triage/proposing/execution nodes.

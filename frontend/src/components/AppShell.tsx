@@ -48,7 +48,7 @@ export function AppShell({
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 bg-slate-950 text-white lg:flex lg:flex-col">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 bg-slate-950 text-white lg:flex lg:flex-col">
           <div className="flex h-24 items-center gap-3 px-7">
             <BrandMark />
             <span className="text-2xl font-semibold">GraphDBA</span>

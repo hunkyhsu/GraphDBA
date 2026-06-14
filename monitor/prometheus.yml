@@ -11,7 +11,6 @@ alerting:
 
 rule_files:
   - "business_rules.yml"
-  - "community_rules.yml"
 
 scrape_configs:
   - job_name: 'prometheus'
@@ -26,3 +25,12 @@ scrape_configs:
           database_role: primary
           environment: DEV
           region: local
+          db_host: host.docker.internal
+          db_port: "5432"
+          db_instance: host.docker.internal:5432
+
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: exporter_instance
+      - source_labels: [db_instance]
+        target_label: instance

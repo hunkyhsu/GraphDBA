@@ -76,6 +76,21 @@ async def get_ticket_with_alert(
     return row if row is None else (row[0], row[1])
 
 
+async def get_pending_ticket_by_alert_id(
+    session: AsyncSession,
+    alert_id: UUID | str,
+) -> Ticket | None:
+    stmt = (
+        select(Ticket)
+        .where(Ticket.alert_id == UUID(str(alert_id)))
+        .where(Ticket.status == TicketStatus.PENDING.value)
+        .order_by(Ticket.updated_at.desc(), Ticket.id.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def list_tickets(
     session: AsyncSession,
     *,

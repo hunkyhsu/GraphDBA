@@ -11,7 +11,7 @@ from graphdba.agents.diagnostic import DiagnosticNode, DiagnosticOutput
 # 引入你最新的状态定义
 from graphdba.agents.state import (
     AlertPayload, Hypothesis, ValidationAction, 
-    WorkflowStatus, HypothesisStatus
+    AgentWorkflowStatus, HypothesisStatus
 )
 
 # ==========================================
@@ -137,7 +137,7 @@ class TestDiagnosticNodeExternal:
         node = DiagnosticNode(mock_llm, mock_mcp_client, mock_embeddings)
         
         result = await node(base_state)
-        assert result["workflow_status"] == WorkflowStatus.FAILED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.FAILED.value
         assert "No tools found" in result["failed_reason"]
         mock_llm.with_structured_output().ainvoke.assert_not_called()
     @pytest.mark.asyncio
@@ -159,7 +159,7 @@ class TestDiagnosticNodeExternal:
         
         result = await node(base_state)
         
-        assert result["workflow_status"] == WorkflowStatus.DIAGNOSED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.DIAGNOSED.value
         assert mock_chain.ainvoke.call_count == 2 
     @pytest.mark.asyncio
     async def test_llm_max_retries_exhausted(self, mock_llm, mock_mcp_client, mock_embeddings, base_state):
@@ -173,7 +173,7 @@ class TestDiagnosticNodeExternal:
         
         result = await node(base_state)
         
-        assert result["workflow_status"] == WorkflowStatus.FAILED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.FAILED.value
         assert "max retry count" in result["failed_reason"]
         assert mock_chain.ainvoke.call_count == node.MAX_RETRY
 
@@ -209,7 +209,7 @@ class TestDiagnosticNodeDeduplication:
         node = await self._setup_node_with_output(mock_llm, mock_mcp_client, mock_embeddings, [new_hypo])
         result = await node(base_state)
         
-        assert result["workflow_status"] == WorkflowStatus.FAILED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.FAILED.value
         assert "filtered" in result["failed_reason"]
     @pytest.mark.asyncio
     async def test_inter_batch_dedup_inconclusive_diff_tools(self, mock_llm, mock_mcp_client, mock_embeddings, base_state):
@@ -225,7 +225,7 @@ class TestDiagnosticNodeDeduplication:
         node = await self._setup_node_with_output(mock_llm, mock_mcp_client, mock_embeddings, [new_hypo])
         result = await node(base_state)
         
-        assert result["workflow_status"] == WorkflowStatus.DIAGNOSED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.DIAGNOSED.value
         assert len(result["current_hypotheses"]) == 1
     @pytest.mark.asyncio
     async def test_intra_batch_dedup(self, mock_llm, mock_mcp_client, mock_embeddings, base_state):
@@ -239,7 +239,7 @@ class TestDiagnosticNodeDeduplication:
         
         result = await node(base_state)
         
-        assert result["workflow_status"] == WorkflowStatus.DIAGNOSED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.DIAGNOSED.value
         assert len(result["current_hypotheses"]) == 1
 
 
@@ -264,7 +264,7 @@ class TestDiagnosticNodeExceptions:
         
         result = await node(base_state)
         
-        assert result["workflow_status"] == WorkflowStatus.FAILED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.FAILED.value
         assert "Critical diagnostic node failure: TimeoutError" in result["failed_reason"]
     @pytest.mark.asyncio
     async def test_no_embedding_model(self, mock_llm, mock_mcp_client, base_state):
@@ -281,5 +281,5 @@ class TestDiagnosticNodeExceptions:
         
         result = await node(base_state)
         
-        assert result["workflow_status"] == WorkflowStatus.FAILED.value
+        assert result["workflow_status"] == AgentWorkflowStatus.FAILED.value
         assert "Critical diagnostic node failure: RuntimeError" in result["failed_reason"]

@@ -1,57 +1,53 @@
 {
-  "version": "4",
-  "groupKey": "{}:{alertname=\"PostgreSQLRowLockContention\", instance=\"postgres-exporter:9187\"}",
-  "status": "firing",
   "receiver": "fastapi-webhook",
-  "groupLabels": {
-    "alertname": "PostgreSQLRowLockContention",
-    "instance": "postgres-exporter:9187"
-  },
-  "commonLabels": {
-    "alertname": "PostgreSQLRowLockContention",
-    "application_name": "psql",
-    "backend_type": "client backend",
-    "datname": "business_db_a",
-    "instance": "postgres-exporter:9187",
-    "job": "postgres-cluster",
-    "server": "host.docker.internal:5432",
-    "severity": "high",
-    "state": "active",
-    "usename": "hunkyhsu",
-    "wait_event": "transactionid",
-    "wait_event_type": "Lock"
-  },
-  "commonAnnotations": {
-    "description": "Instance postgres-exporter:9187 in database business_db_a has active lock blocking. Queries are waiting indefinitely.",
-    "summary": "Database row-level lock contention detected"
-  },
-  "externalURL": "http://7c8805b0862b:9093",
-  "truncatedAlerts": 0,
+  "status": "firing",
   "alerts": [
     {
       "status": "firing",
       "labels": {
-        "alertname": "PostgreSQLRowLockContention",
-        "application_name": "psql",
-        "backend_type": "client backend",
-        "datname": "business_db_a",
-        "instance": "postgres-exporter:9187",
-        "job": "postgres-cluster",
-        "server": "host.docker.internal:5432",
-        "severity": "high",
-        "state": "active",
-        "usename": "hunkyhsu",
-        "wait_event": "transactionid",
-        "wait_event_type": "Lock"
+        "alertname": "PostgreSQLDeadlocksDetected",
+        "cluster_name": "ClusterA",
+        "database_name": "business_db_b",
+        "database_role": "primary",
+        "datname": "business_db_b",
+        "environment": "DEV",
+        "graphdba_route": "dba",
+        "instance": "host.docker.internal:5432",
+        "region": "local",
+        "severity": "critical"
       },
       "annotations": {
-        "description": "Instance postgres-exporter:9187 in database business_db_a has active lock blocking. Queries are waiting indefinitely.",
-        "summary": "Database row-level lock contention detected"
+        "description": "Database business_db_b on host.docker.internal:5432 had 1.0526315789473684 deadlocks in the last 5 minutes.",
+        "summary": "PostgreSQL deadlocks detected"
       },
-      "startsAt": "2026-05-18T13:55:01.35Z",
+      "startsAt": "2026-06-10T17:15:40.594Z",
       "endsAt": "0001-01-01T00:00:00Z",
-      "generatorURL": "http://df707016ca0c:9090/graph?g0.expr=pg_stat_activity_count%7Bwait_event_type%3D%22Lock%22%7D+%3E+0&g0.tab=1",
-      "fingerprint": "957fac5bf2462993"
+      "generatorURL": "http://fcbaf1fbc394:9090/graph?g0.expr=sum+by+%28cluster_name%2C+database_role%2C+environment%2C+region%2C+instance%2C+datname%29+%28increase%28pg_stat_database_deadlocks%7Bdatid%21%3D%220%22%2Cdatname%21~%22template.%2A%7Cpostgres%22%7D%5B5m%5D%29%29+%3E+0&g0.tab=1",
+      "fingerprint": "d4bdd3e825774fa3"
     }
-  ]
+  ],
+  "groupLabels": {
+    "alertname": "PostgreSQLDeadlocksDetected",
+    "instance": "host.docker.internal:5432"
+  },
+  "commonLabels": {
+    "alertname": "PostgreSQLDeadlocksDetected",
+    "cluster_name": "ClusterA",
+    "database_name": "business_db_b",
+    "database_role": "primary",
+    "datname": "business_db_b",
+    "environment": "DEV",
+    "graphdba_route": "dba",
+    "instance": "host.docker.internal:5432",
+    "region": "local",
+    "severity": "critical"
+  },
+  "commonAnnotations": {
+    "description": "Database business_db_b on host.docker.internal:5432 had 1.0526315789473684 deadlocks in the last 5 minutes.",
+    "summary": "PostgreSQL deadlocks detected"
+  },
+  "externalURL": "http://ee5dd8ee767b:9093",
+  "version": "4",
+  "groupKey": "{}:{alertname=\"PostgreSQLDeadlocksDetected\", instance=\"host.docker.internal:5432\"}",
+  "truncatedAlerts": 0
 }

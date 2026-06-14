@@ -1,4 +1,6 @@
 from functools import lru_cache
+from urllib.parse import quote
+
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +16,12 @@ class DatabaseConfig(BaseModel):
     @property
     def connection_string(self) -> str:
         return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
+
+    @property
+    def psycopg_connection_string(self) -> str:
+        user = quote(self.user, safe="")
+        password = quote(self.password, safe="")
+        return f"postgresql://{user}:{password}@{self.host}:{self.port}/{self.db}"
 
 class LLMConfig(BaseModel):
     deepseek_key: str = Field(description="DeepSeek API Key")
@@ -32,7 +40,16 @@ class SecurityConfig(BaseModel):
     
 
 class AgentConfig(BaseModel):
-    max_retries: int = Field(default=3, description="Max retries count")
+    diagnostic_max_retries: int = Field(default=3)
+    node_max_retries: int = Field(default=3)
+    startup_recovery_enabled: bool = Field(default=True)
+    semantic_similarity_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+    diagnostic_llm_timeout_s: float = Field(default=50.0, gt=0)
+    diagnostic_embedding_timeout_s: float = Field(default=5.0, gt=0)
+    diagnostic_mcp_timeout_s: float = Field(default=5.0, gt=0)
+    validation_llm_timeout_s: float = Field(default=15.0, gt=0)
+    validation_mcp_timeout_s: float = Field(default=5.0, gt=0)
+    planning_llm_timeout_s: float = Field(default=45.0, gt=0)
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

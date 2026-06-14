@@ -14,7 +14,6 @@ type LoginPageProps = {
 export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +28,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
         employee_id: employeeId.trim(),
         password,
       });
-      saveSession(loginResponse, remember);
+      saveSession(loginResponse);
       onAuthenticated(loginResponse);
       setPassword("");
     } catch (loginError) {
@@ -47,7 +46,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           GraphDBA
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          Database Autonomous Operations
+          Database Autonomous System
         </p>
       </div>
 
@@ -77,7 +76,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
                 <button
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
-                  className="rounded p-1 text-slate-600 hover:bg-slate-100"
+                  className="grid h-8 w-8 place-items-center rounded text-slate-600 hover:bg-slate-100"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -97,22 +96,8 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
             />
           </label>
 
-          <div className="flex items-center justify-between gap-4 text-sm">
-            <label className="flex items-center gap-2 font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(event) => setRemember(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 accent-indigo-600 focus:ring-indigo-500"
-              />
-              Remember me
-            </label>
-            <button
-              type="button"
-              className="font-semibold text-indigo-600 hover:text-indigo-700"
-            >
-              Forgot password?
-            </button>
+          <div className="text-right text-sm font-medium text-slate-500">
+            Password reset requires admin approval.
           </div>
 
           {error ? (

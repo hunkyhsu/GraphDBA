@@ -2,12 +2,9 @@ import type { LoginResponse } from "./api";
 
 const STORAGE_KEY = "graphdba.session";
 
-export function saveSession(session: LoginResponse, remember: boolean): void {
-  const storage = remember ? localStorage : sessionStorage;
-  storage.setItem(STORAGE_KEY, JSON.stringify(session));
-
-  const otherStorage = remember ? sessionStorage : localStorage;
-  otherStorage.removeItem(STORAGE_KEY);
+export function saveSession(session: LoginResponse): void {
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  localStorage.removeItem(STORAGE_KEY);
 }
 
 export function readSession(): LoginResponse | null {

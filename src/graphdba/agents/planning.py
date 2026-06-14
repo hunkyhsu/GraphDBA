@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field, model_validator
 from langchain_core.prompts import ChatPromptTemplate
 
-from graphdba.agents.state import WorkflowStatus, PlanRiskLevel, FinalPlan
+from graphdba.agents.state import AgentWorkflowStatus, FinalPlan
+from graphdba.config.settings import get_settings
 from graphdba.utils.external_call import llm_call_with_retry
 from graphdba.agents.state import AgentState, AgentStateUpdate, AlertPayload, Hypothesis
 
@@ -36,11 +37,12 @@ class PlanningOutput(BaseModel):
         return self
 
 class PlanningNode:
-    LLM_TIMEOUT_S = 45.0
-    MAX_RETRY = 3
     SCHEMA_INSTRUCTIONS = json.dumps(PlanningOutput.model_json_schema(), indent=2)
 
     def __init__(self, llm: BaseChatModel):
+        agent_settings = get_settings().agent
+        self.llm_timeout_s = agent_settings.planning_llm_timeout_s
+        self.max_retry = agent_settings.node_max_retries
         self.llm = llm
         self.structured_llm = self.llm.with_structured_output(PlanningOutput, method="json_mode")
         self.prompt = ChatPromptTemplate.from_messages([
@@ -108,26 +110,26 @@ class PlanningNode:
                 "verified_context": verified_context,
                 "schema_instructions": self.SCHEMA_INSTRUCTIONS,
             },
-            timeout=self.LLM_TIMEOUT_S,
-            max_retry=self.MAX_RETRY,
+            timeout=self.llm_timeout_s,
+            max_retry=self.max_retry,
             logger=logger,
         )
         if fail_reason:
             return {
-                "workflow_status": WorkflowStatus.FAILED.value,
-                "terminal_message": fail_reason
+                "workflow_status": AgentWorkflowStatus.FAILED.value,
+                "failure_reason": fail_reason
             }
         if result.require_human_escalation:
             logger.warning("Planning escalation required. Reason: %s", result.escalation_reason)
             return {
-                "workflow_status": WorkflowStatus.ESCALATED.value,
-                "terminal_message": f"Human escalation required: {result.escalation_reason}"
+                "workflow_status": AgentWorkflowStatus.ESCALATED.value,
+                "failure_reason": f"Human escalation required: {result.escalation_reason}"
             }
         logger.info("Plan created successfully")
         final_plan: FinalPlan = result.plan
         final_plan.target_alert_id = alert.id
         final_plan.target_hypothesis_id = ",".join([h.id for h in verified_hypotheses])
         return {
-            "workflow_status": WorkflowStatus.PLANNED.value,
+            "workflow_status": AgentWorkflowStatus.PLANNED.value,
             "final_plan": final_plan.model_dump(mode="json")
         }

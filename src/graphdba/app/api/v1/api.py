@@ -1,12 +1,12 @@
 from fastapi import APIRouter
-from graphdba.app.api.v1.endpoints import runs
-from graphdba.app.api.v1.endpoints import alerts
-from graphdba.app.api.v1.endpoints import dashboard
-from graphdba.app.api.v1.endpoints import login
-from graphdba.app.api.v1.endpoints import me
-from graphdba.app.api.v1.endpoints import stream_run
-from graphdba.app.api.v1.endpoints import approve_run
-from graphdba.app.api.v1.endpoints import tickets
+from graphdba.app.api.v1 import alerts
+from graphdba.app.api.v1 import approve_run
+from graphdba.app.api.v1 import dashboard
+from graphdba.app.api.v1 import login
+from graphdba.app.api.v1 import me
+from graphdba.app.api.v1 import runs
+from graphdba.app.api.v1 import stream_run
+from graphdba.app.api.v1 import tickets
 
 api_router = APIRouter()
 

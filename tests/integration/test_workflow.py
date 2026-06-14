@@ -5,8 +5,10 @@ from uuid import uuid4
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING
 
+from langgraph.checkpoint.memory import MemorySaver
+
 from graphdba.agents.graph import build_graph
-from graphdba.agents.state import FinalPlan, WorkflowStatus
+from graphdba.agents.state import FinalPlan, AgentWorkflowStatus
 from graphdba.config.dependencies import get_reasoning_llm, get_chat_llm
 from tests.conftest import ManagedMockClient
 
@@ -34,15 +36,11 @@ def _make_initial_state(alert: dict) -> AgentStateUpdate:
         alert = {**alert, "id": alert.get("fingerprint", "test_alert")}
     return {
         "alert": alert,
-        "workflow_status": WorkflowStatus.TRIAGED.value,
         "attempt_count": 0,
         "current_hypotheses": [],
         "rejected_hypotheses": [],
         "final_plan": None,
-        "ticket_id": None,
-        "approval_decision": None,
-        "human_feedback": None,
-        "terminal_message": None,
+        "failure_reason": None,
     }
 
 
@@ -66,7 +64,7 @@ async def _full_workflow_reaches_planning():
 
     async with AsyncExitStack() as stack:
         mcp_read = await stack.enter_async_context(ManagedMockClient(FIXTURE_PATH, "read"))
-        graph = build_graph(llm_reasoning, llm_chat, FakeEmbeddings(), mcp_read)
+        graph = build_graph(llm_reasoning, llm_chat, FakeEmbeddings(), mcp_read, MemorySaver())
         config = _make_config()
 
         await _stream_graph(graph, _make_initial_state(alert), config)
@@ -74,7 +72,7 @@ async def _full_workflow_reaches_planning():
         snapshot = graph.get_state(config)
         assert not snapshot.next, f"Graph should finish at planning; next={snapshot.next}"
         status = snapshot.values.get("workflow_status")
-        assert status == WorkflowStatus.PLANNED.value, f"Expected PLANNED, got {status}"
+        assert status == AgentWorkflowStatus.PLANNED.value, f"Expected PLANNED, got {status}"
 
         raw_plan = snapshot.values.get("final_plan")
         assert raw_plan is not None, "final_plan must be populated before the interrupt"

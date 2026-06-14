@@ -3,8 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from graphdba.app.api.v1.endpoints.alerts import _serialize_alert_list_item
-from graphdba.app.api.v1.endpoints.tickets import _serialize_ticket_list_item
+from graphdba.app.api.v1.tickets import _serialize_ticket_list_item
 from graphdba.app.core.depends import get_verified_token
 from graphdba.app.schemas.response.dashboard import DashboardStatsResponse
 from graphdba.database.models.alert import AlertStatus
@@ -26,7 +25,7 @@ async def get_dashboard(
     pending_ticket_count = await tickets.count_tickets_by_status(session, TicketStatus.PENDING.value)
 
     distribution = [
-        ("received", "Triage", await alerts.count_alerts_by_status(session, AlertStatus.RECEIVED.value)),
+        ("received", "Received", await alerts.count_alerts_by_status(session, AlertStatus.RECEIVED.value)),
         ("running", "Agent Running", await alerts.count_alerts_by_status(session, AlertStatus.RUNNING.value)),
         ("waiting_approval", "Waiting Approval", alert_stats["pending_review"]),
         ("solved", "Solved", await alerts.count_alerts_by_status(session, AlertStatus.SOLVED.value)),
@@ -40,7 +39,7 @@ async def get_dashboard(
         "active_runs": alert_stats["active"] + alert_stats["pending_review"],
         "pending_approval": pending_ticket_count,
         "solved_24h": alert_stats["resolved_24h"],
-        "recent_alerts": [_serialize_alert_list_item(alert) for alert in recent_alerts],
+        "recent_alerts": recent_alerts,
         "pending_tickets": [_serialize_ticket_list_item(ticket, alert) for ticket, alert in pending_ticket_rows],
         "run_status_distribution": [
             {"key": key, "label": label, "count": count}

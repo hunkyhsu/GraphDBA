@@ -1,5 +1,12 @@
+from enum import StrEnum
+
 from pydantic import BaseModel, model_validator
-from graphdba.agents.state import ApprovalDecision
+
+
+class ApprovalDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
 
 class ApprovalRequest(BaseModel):
     decision: ApprovalDecision

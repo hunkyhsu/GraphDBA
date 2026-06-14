@@ -98,12 +98,9 @@ export type RunStateResponse = {
     current_hypotheses: Array<Record<string, unknown>>;
     rejected_hypotheses: Array<Record<string, unknown>>;
     final_plan: FinalPlan | null;
-    ticket_id: string | null;
     attempt_count: number;
-    workflow_status: string;
-    approval_decision: string | null;
-    human_feedback: string | null;
-    terminal_message: string | null;
+    workflow_status: string | null;
+    failure_reason: string | null;
   };
   next: string[];
 };

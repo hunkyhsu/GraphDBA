@@ -7,18 +7,18 @@ from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from graphdba.app.core.security import decode_access_token
-from graphdba.agents.runtime import AgentRuntime
+from graphdba.agents.container import AgentContainer
 from graphdba.database.models.user import User
 from graphdba.database.repositories import users
 from graphdba.database.session import get_session
 
 
-def get_agent_runtime(request: Request) -> AgentRuntime:
-    return cast(AgentRuntime, request.app.state.agent_runtime)
+def get_agent_container(request: Request) -> AgentContainer:
+    return cast(AgentContainer, request.app.state.agent_container)
 
 
 async def get_graph(request: Request) -> CompiledStateGraph:
-    return await get_agent_runtime(request).get_graph()
+    return await get_agent_container(request).get_graph()
 
 
 def get_pool(request: Request) -> asyncpg.Pool:
